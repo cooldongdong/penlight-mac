@@ -65,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.overlay.settings.adjust(bigger: bigger)
             self?.overlay.redraw()
         }
+        ActionRunner.openSettings = { [weak self] in self?.status.openSettings() }
         router.actionFor = { [weak self] slot in self?.action(slot) ?? slot.defaultAction }
         volumeKeys.action = { [weak self] slot in self?.overlay.settings.action(for: slot) ?? slot.defaultAction }
         router.passVolumeToSystem = { [weak self] up in self?.volumeKeys.systemHandles(up: up) ?? true }

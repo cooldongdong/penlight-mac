@@ -40,6 +40,7 @@ enum PenAction: Codable, Hashable {
     /// Bigger / smaller for the current effect; continuous while held when assigned
     /// to "hold mode key + page up/down".
     case grow, shrink
+    case openSettings
     case click
     case missionControl
     case blackScreen
@@ -51,7 +52,7 @@ enum PenAction: Codable, Hashable {
         let all: [PenAction] = [.nothing, .click, .missionControl, .blackScreen, .pageUp, .pageDown]
             + [.nextMode, .previousMode, .grow, .shrink]
             + EffectMode.allCases.map { .mode($0) }
-            + [.shortcut(nil)]
+            + [.openSettings, .shortcut(nil)]
         guard let native = slot.nativeTitle else { return all }
         // The key's own function goes first, under its real name; don't list it twice.
         return [.systemVolume] + all.filter { $0.title != native }
@@ -87,6 +88,7 @@ enum PenAction: Codable, Hashable {
         case .previousMode: return "上一個模式"
         case .grow: return "效果放大"
         case .shrink: return "效果縮小"
+        case .openSettings: return "打開設定"
         case .click: return "滑鼠點擊"
         case .missionControl: return "指揮中心"
         case .blackScreen: return "黑屏"
@@ -115,6 +117,7 @@ enum PenAction: Codable, Hashable {
         case .previousMode: return "arrow.left.circle"
         case .grow: return "plus.circle"
         case .shrink: return "minus.circle"
+        case .openSettings: return "gearshape"
         case .click: return "cursorarrow.click"
         case .missionControl: return "rectangle.3.group"
         case .blackScreen: return "rectangle.fill"
@@ -152,6 +155,7 @@ enum ActionRunner {
     static var switchMode: ((EffectMode) -> Void)?
     static var cycleMode: ((_ forward: Bool) -> Void)?
     static var resize: ((_ bigger: Bool) -> Void)?
+    static var openSettings: (() -> Void)?
 
     static func perform(_ action: PenAction, volumeUp: Bool = true) {
         switch action {
@@ -165,6 +169,7 @@ enum ActionRunner {
         case .previousMode: cycleMode?(false)
         case .grow: resize?(true)
         case .shrink: resize?(false)
+        case .openSettings: openSettings?()
         case .mode(let m): switchMode?(m)
         case .shortcut(let combo):
             if let combo { press(keyCode: CGKeyCode(combo.keyCode), flags: combo.cgFlags) }
