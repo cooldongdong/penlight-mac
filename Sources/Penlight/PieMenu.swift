@@ -7,14 +7,16 @@ import AppKit
 /// pick it. The cursor is then put back where it started, so picking a mode never
 /// moves the pointer. Releasing without leaving the centre cancels.
 final class PieMenu {
-    /// Direction → mode. Up is the most used one.
-    static let layout: [(direction: Direction, mode: EffectMode)] = [
-        (.up, .laser), (.right, .spotlight), (.down, .magnifier), (.left, .pointer),
+    /// Where each direction's action comes from (Settings → 圓形選單).
+    static let slots: [(direction: Direction, slot: KeySlot)] = [
+        (.up, .pieUp), (.right, .pieRight), (.down, .pieDown), (.left, .pieLeft),
     ]
 
     enum Direction { case up, right, down, left }
 
-    var onPick: ((EffectMode) -> Void)?
+    /// Reads the current action of a slice.
+    var actionFor: (KeySlot) -> PenAction = { $0.defaultAction }
+    var onPick: ((PenAction) -> Void)?
 
     private let size: CGFloat = 320
     /// Cursor must travel this far from the centre before a slice is selected.
@@ -41,6 +43,7 @@ final class PieMenu {
         anchor = NSEvent.mouseLocation
         view.selected = nil
         view.knob = .zero
+        view.actions = Dictionary(uniqueKeysWithValues: Self.slots.map { ($0.direction, actionFor($0.slot)) })
         panel.setFrameOrigin(NSPoint(x: anchor.x - size / 2, y: anchor.y - size / 2))
         panel.alphaValue = 1
         panel.orderFrontRegardless()
@@ -59,7 +62,9 @@ final class PieMenu {
         let mainHeight = NSScreen.screens.first?.frame.height ?? 0
         CGWarpMouseCursorPosition(CGPoint(x: anchor.x, y: mainHeight - anchor.y))
         SystemCursor.show()
-        if let picked { onPick?(Self.layout.first { $0.direction == picked }!.mode) }
+        if let picked, let slot = Self.slots.first(where: { $0.direction == picked })?.slot {
+            onPick?(actionFor(slot))
+        }
     }
 
     private func track() {
@@ -82,13 +87,15 @@ final class PieMenu {
 
 private final class PieView: NSView {
     var selected: PieMenu.Direction? { didSet { if selected != oldValue { needsDisplay = true } } }
+    var actions: [PieMenu.Direction: PenAction] = [:] { didSet { needsDisplay = true } }
     var knob: CGPoint = .zero { didSet { needsDisplay = true } }
 
     override func draw(_ dirtyRect: NSRect) {
         let c = NSPoint(x: bounds.midX, y: bounds.midY)
         let outer = bounds.width / 2 - 4, inner: CGFloat = 38
 
-        for (direction, mode) in PieMenu.layout {
+        for (direction, _) in PieMenu.slots {
+            let action = actions[direction] ?? .nothing
             let mid: CGFloat = {
                 switch direction { case .up: return 90; case .left: return 180; case .down: return 270; case .right: return 0 }
             }()
@@ -102,12 +109,12 @@ private final class PieView: NSView {
 
             let rad = mid * .pi / 180, r = (outer + inner) / 2
             let p = NSPoint(x: c.x + cos(rad) * r, y: c.y + sin(rad) * r)
-            if let icon = NSImage(systemSymbolName: Self.symbol(mode), accessibilityDescription: nil)?
+            if let icon = NSImage(systemSymbolName: action.symbol, accessibilityDescription: nil)?
                 .withSymbolConfiguration(.init(pointSize: 26, weight: .semibold)) {
                 let tinted = icon.tinted(.white)
                 tinted.draw(in: NSRect(x: p.x - tinted.size.width / 2, y: p.y - 4, width: tinted.size.width, height: tinted.size.height))
             }
-            let label = NSAttributedString(string: mode.title, attributes: [
+            let label = NSAttributedString(string: action.shortTitle, attributes: [
                 .font: NSFont.systemFont(ofSize: 15, weight: .semibold), .foregroundColor: NSColor.white,
             ])
             label.draw(at: NSPoint(x: p.x - label.size().width / 2, y: p.y - 26))
@@ -118,7 +125,6 @@ private final class PieView: NSView {
         NSBezierPath(ovalIn: NSRect(x: k.x - 7, y: k.y - 7, width: 14, height: 14)).fill()
     }
 
-    static func symbol(_ mode: EffectMode) -> String { mode.symbol }
 }
 
 private extension NSImage {

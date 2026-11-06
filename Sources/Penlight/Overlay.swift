@@ -1,7 +1,7 @@
 import AppKit
 import Combine
 
-enum EffectMode: Int, CaseIterable {
+enum EffectMode: Int, CaseIterable, Codable {
     case laser, spotlight, magnifier, pointer
 
     var title: String {

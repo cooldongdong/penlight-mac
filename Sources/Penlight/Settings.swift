@@ -50,12 +50,12 @@ final class EffectSettings: ObservableObject {
     private func save(_ v: CGFloat, _ key: String) { defaults.set(Double(v), forKey: key) }
 
     func action(for slot: KeySlot) -> PenAction {
-        defaults.string(forKey: "slot." + slot.rawValue).flatMap(PenAction.init(rawValue:)) ?? slot.defaultAction
+        PenAction.decode(defaults.object(forKey: "slot." + slot.rawValue)) ?? slot.defaultAction
     }
 
     func setAction(_ action: PenAction, for slot: KeySlot) {
         objectWillChange.send()
-        defaults.set(action.rawValue, forKey: "slot." + slot.rawValue)
+        defaults.set(action.encoded, forKey: "slot." + slot.rawValue)
     }
 
     /// Page up / page down while holding the mode key. `steps` may be fractional

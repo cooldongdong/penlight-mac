@@ -85,13 +85,8 @@ private struct KeysTab: View {
     var body: some View {
         Form {
             Section {
-                ForEach(KeySlot.allCases, id: \.self) { slot in
-                    Picker(slot.title, selection: Binding(
-                        get: { settings.action(for: slot) },
-                        set: { settings.setAction($0, for: slot) }
-                    )) {
-                        ForEach(PenAction.allCases, id: \.self) { Text($0.title).tag($0) }
-                    }
+                ForEach(KeySlot.volumeSlots, id: \.self) { slot in
+                    ActionPicker(settings: settings, slot: slot)
                 }
             } header: {
                 Text("音量鍵")
@@ -100,6 +95,60 @@ private struct KeysTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+/// The pie drawn in the middle, each direction's picker placed on its side.
+private struct PieTab: View {
+    @ObservedObject var settings: EffectSettings
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text("連按兩下模式鍵、第二下按住，往一個方向甩筆再放開。")
+                .font(.system(size: 12)).foregroundStyle(.secondary)
+            ZStack {
+                diagram
+                editor(.pieUp).offset(y: -100)
+                editor(.pieDown).offset(y: 124)
+                editor(.pieLeft).offset(x: -172, y: 14)
+                editor(.pieRight).offset(x: 172, y: 14)
+            }
+            .frame(width: 520, height: 290)
+        }
+        .padding(.top, 18)
+    }
+
+    /// Same look as the real pie, small.
+    private var diagram: some View {
+        ZStack {
+            Circle().fill(Color.primary.opacity(0.06))
+            Path { p in
+                p.move(to: CGPoint(x: 18, y: 18)); p.addLine(to: CGPoint(x: 102, y: 102))
+                p.move(to: CGPoint(x: 102, y: 18)); p.addLine(to: CGPoint(x: 18, y: 102))
+            }
+            .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+            ForEach(PieMenu.slots, id: \.slot) { entry in
+                Image(systemName: settings.action(for: entry.slot).symbol)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .offset(Self.iconOffset(entry.direction))
+            }
+            Circle().fill(Color.primary.opacity(0.5)).frame(width: 8, height: 8)
+        }
+        .frame(width: 120, height: 120)
+    }
+
+    private static func iconOffset(_ d: PieMenu.Direction) -> CGSize {
+        switch d {
+        case .up: return CGSize(width: 0, height: -38)
+        case .down: return CGSize(width: 0, height: 38)
+        case .left: return CGSize(width: -38, height: 0)
+        case .right: return CGSize(width: 38, height: 0)
+        }
+    }
+
+    private func editor(_ slot: KeySlot) -> some View {
+        ActionPicker(settings: settings, slot: slot, showsLabel: false, compactWidth: 160)
     }
 }
 
@@ -142,18 +191,19 @@ private final class SettingsTabs: NSTabViewController {
     }
 }
 
-/// Standard macOS settings window: toolbar tabs, fixed width, height follows the tab.
+/// Standard macOS settings window: toolbar tabs, one fixed size for every tab
+/// (the window must not jump when switching tabs).
 final class SettingsWindowController: NSWindowController {
-    enum Tab: Int, CaseIterable { case general, keys, permissions, about }
+    enum Tab: Int, CaseIterable { case general, keys, pie, permissions, about }
 
     private let tabs = SettingsTabs()
-    private static let width: CGFloat = 520
+    private static let size = NSSize(width: 560, height: 380)
 
     init(settings: EffectSettings, state: AppState) {
         tabs.tabStyle = .toolbar
         func item<V: View>(_ title: String, _ symbol: String, _ view: V) -> NSTabViewItem {
-            let host = NSHostingController(rootView: view.frame(width: Self.width).fixedSize(horizontal: false, vertical: true))
-            host.sizingOptions = .preferredContentSize
+            let host = NSHostingController(rootView: view.frame(width: Self.size.width, height: Self.size.height, alignment: .top))
+            host.sizingOptions = []
             let item = NSTabViewItem(viewController: host)
             item.label = title
             item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
@@ -161,11 +211,13 @@ final class SettingsWindowController: NSWindowController {
         }
         tabs.addTabViewItem(item("一般", "gearshape", GeneralTab(settings: settings)))
         tabs.addTabViewItem(item("按鍵", "keyboard", KeysTab(settings: settings)))
+        tabs.addTabViewItem(item("圓形選單", "circle.grid.cross", PieTab(settings: settings)))
         tabs.addTabViewItem(item("權限", "lock.shield", PermissionsTab(state: state)))
         tabs.addTabViewItem(item("關於", "info.circle", AboutTab()))
 
         let window = NSWindow(contentViewController: tabs)
         window.styleMask = [.titled, .closable]
+        window.setContentSize(Self.size)
         window.title = tabs.tabViewItems.first?.label ?? "Penlight"
         window.isReleasedWhenClosed = false
         super.init(window: window)

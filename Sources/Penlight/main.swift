@@ -12,7 +12,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let volumeKeys = VolumeKeys()
     private lazy var pie: PieMenu = {
         let p = PieMenu()
-        p.onPick = { [weak self] mode in self?.switchMode(to: mode) }
+        p.actionFor = { [weak self] slot in self?.overlay.settings.action(for: slot) ?? slot.defaultAction }
+        p.onPick = { action in ActionRunner.perform(action) }
         return p
     }()
 
@@ -39,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         hid.start()
 
+        ActionRunner.switchMode = { [weak self] mode in self?.switchMode(to: mode) }
         volumeKeys.action = { [weak self] slot in self?.overlay.settings.action(for: slot) ?? slot.defaultAction }
         router.passVolumeToSystem = { [weak self] up in self?.volumeKeys.systemHandles(up: up) ?? true }
         router.lastPenKeyReport = { [weak self] in self?.hid.lastKeyReportAt ?? 0 }
