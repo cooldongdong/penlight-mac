@@ -30,33 +30,6 @@ final class OverlayWindow: NSWindow {
     }
 }
 
-/// Shared, adjustable look of every effect.
-final class EffectSettings {
-    var mode: EffectMode = .laser
-    var laserColor: NSColor = .systemRed
-    var laserRadius: CGFloat = 14
-    var spotlightRadius: CGFloat = 180
-    var spotlightDim: CGFloat = 0.75
-    var lensRadius: CGFloat = 170
-    var zoom: CGFloat = 2
-
-    /// Page up / page down while holding the mode key.
-    func adjust(bigger: Bool) {
-        switch mode {
-        case .laser:
-            laserRadius = (laserRadius + (bigger ? 4 : -4)).clamped(6, 60)
-        case .spotlight:
-            spotlightRadius = (spotlightRadius + (bigger ? 30 : -30)).clamped(60, 600)
-        case .magnifier:
-            zoom = (zoom + (bigger ? 0.5 : -0.5)).clamped(1.5, 5)
-        }
-    }
-}
-
-extension CGFloat {
-    func clamped(_ lo: CGFloat, _ hi: CGFloat) -> CGFloat { Swift.min(Swift.max(self, lo), hi) }
-}
-
 final class EffectView: NSView {
     let settings: EffectSettings
     /// Cursor position in view coordinates, or nil when the cursor is on another screen.
@@ -74,7 +47,7 @@ final class EffectView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     override func draw(_ dirtyRect: NSRect) {
-        switch settings.mode {
+        switch settings.activeMode {
         case .laser: drawLaser()
         case .spotlight: drawSpotlight()
         case .magnifier: break // drawn by `lens`
@@ -83,7 +56,7 @@ final class EffectView: NSView {
     }
 
     func updateLens() {
-        guard settings.mode == .magnifier, let p = point else { lens.isHidden = true; return }
+        guard settings.activeMode == .magnifier, let p = point else { lens.isHidden = true; return }
         lens.isHidden = false
         lens.place(at: p, viewSize: bounds.size, radius: settings.lensRadius, zoom: settings.zoom)
     }
@@ -153,9 +126,28 @@ final class OverlayController {
         if isShowing { windows.forEach { $0.window.orderFrontRegardless() } }
     }
 
-    func show() {
+    private var previewEnd: DispatchWorkItem?
+
+    /// Shows `mode` for a moment without changing the saved mode or hiding the cursor.
+    /// Ignored while the pen is actually holding an effect.
+    func preview(mode: EffectMode, for seconds: TimeInterval) {
+        if isShowing && settings.previewMode == nil { return }
+        settings.previewMode = mode
+        show(hideCursor: false)
+        previewEnd?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.settings.previewMode != nil else { return }
+            self.hide()
+        }
+        previewEnd = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
+    }
+
+    func show(hideCursor: Bool = true) {
+        if hideCursor { settings.previewMode = nil; previewEnd?.cancel() } // real hold wins over a preview
         isShowing = true
-        SystemCursor.hide()
+        if hideCursor { SystemCursor.hide() }
+        redraw()
         windows.forEach { $0.window.orderFrontRegardless() }
         tracker?.invalidate()
         tracker = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] _ in self?.update() }
@@ -165,6 +157,7 @@ final class OverlayController {
 
     func hide() {
         isShowing = false
+        settings.previewMode = nil
         SystemCursor.show()
         tracker?.invalidate(); tracker = nil
         windows.forEach { $0.view.point = nil; $0.window.orderOut(nil) }
@@ -184,7 +177,7 @@ final class OverlayController {
             let p: NSPoint? = w.screen.frame.contains(mouse)
                 ? NSPoint(x: mouse.x - w.screen.frame.minX, y: mouse.y - w.screen.frame.minY) : nil
             if p != w.view.point { w.view.point = p }
-            if p != nil, settings.mode == .magnifier, let id = w.screen.displayID {
+            if p != nil, settings.activeMode == .magnifier, let id = w.screen.displayID {
                 stopStreamWork?.cancel()
                 streamer.start(displayID: id)
             }
