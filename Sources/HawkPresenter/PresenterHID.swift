@@ -26,6 +26,10 @@ final class PresenterHID {
         case volumeUpWhileHeld
         case volumeDownWhileHeld
         case doubleTap
+        /// Double-tap whose second press is held (0x08, then 0x04 ~0.5 s later).
+        /// Ends with `gestureEnded` instead of `holdEnded`.
+        case gestureBegan
+        case gestureEnded
         case connected(Bool)
     }
 
@@ -41,6 +45,11 @@ final class PresenterHID {
     private var held = false
     private var lastPenMouse = Date.distantPast
     private var releaseTimer: Timer?
+    /// Set between a 0x08 and either a following hold (→ gesture) or the timeout (→ doubleTap).
+    private var pendingDoubleTap: DispatchWorkItem?
+    private var inGesture = false
+    /// After 0x08 the dongle sends 0x04 about 0.5 s later if the second press is held.
+    private let doubleTapHoldWindow: TimeInterval = 0.8
 
     /// The pen sometimes reports 0x00 while the key is still physically held
     /// (cursor keeps moving). Only treat it as released once the pen's mouse
@@ -96,7 +105,7 @@ final class PresenterHID {
         if raw >= 0x10 {
             // Whole codes; all of them imply the mode key is held.
             markHeld()
-            if raw != lastRaw {
+            if raw != lastRaw && !inGesture {
                 if raw == 0xED { onEvent?(.volumeUpWhileHeld) }
                 if raw == 0xEE { onEvent?(.volumeDownWhileHeld) }
             }
@@ -105,10 +114,18 @@ final class PresenterHID {
 
         let bits = raw
         defer { lastBits = bits }
-        if bits & 0x08 != 0 && lastBits & 0x08 == 0 { onEvent?(.doubleTap) }
+        if bits & 0x08 != 0 && lastBits & 0x08 == 0 && !held {
+            pendingDoubleTap?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                self?.pendingDoubleTap = nil
+                self?.onEvent?(.doubleTap)
+            }
+            pendingDoubleTap = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + doubleTapHoldWindow, execute: work)
+        }
 
         let adjust = bits & 0x03, lastAdjust = lastBits & 0x03
-        if adjust != lastAdjust {
+        if adjust != lastAdjust && !inGesture {
             if lastAdjust != 0 { onEvent?(.adjustEnded) }
             if adjust == 0x01 { onEvent?(.adjustBegan(bigger: true)) }
             if adjust == 0x02 { onEvent?(.adjustBegan(bigger: false)) }
@@ -123,7 +140,15 @@ final class PresenterHID {
 
     private func markHeld() {
         releaseTimer?.invalidate(); releaseTimer = nil
-        if !held { held = true; onEvent?(.holdBegan) }
+        guard !held else { return }
+        held = true
+        if let pending = pendingDoubleTap {
+            pending.cancel(); pendingDoubleTap = nil
+            inGesture = true
+            onEvent?(.gestureBegan)
+        } else {
+            onEvent?(.holdBegan)
+        }
     }
 
     private func scheduleReleaseCheck() {
@@ -134,7 +159,12 @@ final class PresenterHID {
             if Date().timeIntervalSince(self.lastPenMouse) >= self.releaseQuietInterval {
                 t.invalidate()
                 self.held = false
-                self.onEvent?(.holdEnded)
+                if self.inGesture {
+                    self.inGesture = false
+                    self.onEvent?(.gestureEnded)
+                } else {
+                    self.onEvent?(.holdEnded)
+                }
             }
         }
     }

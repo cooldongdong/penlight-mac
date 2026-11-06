@@ -6,6 +6,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlay: OverlayController!
     private lazy var hud = ModeHUD()
     private var menu: MenuController!
+    private lazy var pie: PieMenu = {
+        let p = PieMenu()
+        p.onPick = { [weak self] mode in self?.switchMode(to: mode) }
+        return p
+    }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         overlay = OverlayController()
@@ -25,6 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .adjustEnded: self.stopAdjusting()
             case .volumeUpWhileHeld, .doubleTap: self.switchMode(to: self.overlay.settings.mode.next)
             case .volumeDownWhileHeld: self.switchMode(to: self.overlay.settings.mode.previous)
+            case .gestureBegan: self.pie.begin()
+            case .gestureEnded: self.pie.end()
             case .connected(let ok): self.menu.statusLine.title = ok ? "簡報筆：已連線" : "簡報筆：未連線"
             }
         }
