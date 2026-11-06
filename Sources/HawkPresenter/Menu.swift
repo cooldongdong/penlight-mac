@@ -10,6 +10,8 @@ final class MenuController: NSObject, NSMenuDelegate {
     private var colorItems: [NSMenuItem] = []
     private let dimSlider = NSSlider(value: 0.75, minValue: 0.2, maxValue: 0.95, target: nil, action: nil)
     private var previewWork: DispatchWorkItem?
+    private var actionItems: [NSMenuItem] = []
+    private let accessibilityItem = NSMenuItem(title: "", action: #selector(openAccessibility), keyEquivalent: "")
     private let hudItem = NSMenuItem(title: "切換時顯示模式名稱", action: #selector(toggleHUD), keyEquivalent: "")
 
     init(overlay: OverlayController) {
@@ -62,6 +64,28 @@ final class MenuController: NSObject, NSMenuDelegate {
         menu.addItem(sliderItem)
 
         menu.addItem(.separator())
+        let keysRoot = NSMenuItem(title: "簡報筆音量鍵", action: nil, keyEquivalent: "")
+        let keysMenu = NSMenu()
+        for slot in KeySlot.allCases {
+            let slotItem = NSMenuItem(title: slot.title, action: nil, keyEquivalent: "")
+            let sub = NSMenu()
+            for action in PenAction.allCases {
+                let item = NSMenuItem(title: action.title, action: #selector(pickAction(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = [slot.rawValue, action.rawValue]
+                sub.addItem(item)
+                actionItems.append(item)
+            }
+            slotItem.submenu = sub
+            keysMenu.addItem(slotItem)
+        }
+        keysMenu.addItem(.separator())
+        keysMenu.addItem(accessibilityItem)
+        accessibilityItem.target = self
+        keysRoot.submenu = keysMenu
+        menu.addItem(keysRoot)
+
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "結束", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
     }
@@ -72,6 +96,23 @@ final class MenuController: NSObject, NSMenuDelegate {
         colorItems.forEach { $0.state = EffectSettings.laserPresets[$0.tag].1.hexRGB == hex ? .on : .off }
         dimSlider.doubleValue = Double(settings.spotlightDim)
         hudItem.state = settings.showModeHUD ? .on : .off
+        for item in actionItems {
+            guard let pair = item.representedObject as? [String],
+                  let slot = KeySlot(rawValue: pair[0]) else { continue }
+            item.state = settings.action(for: slot).rawValue == pair[1] ? .on : .off
+        }
+        accessibilityItem.title = KeyRouter.isTrusted ? "輔助使用權限：已允許" : "輔助使用權限：尚未允許（點此開啟設定）"
+        accessibilityItem.isEnabled = !KeyRouter.isTrusted
+    }
+
+    @objc private func pickAction(_ sender: NSMenuItem) {
+        guard let pair = sender.representedObject as? [String],
+              let slot = KeySlot(rawValue: pair[0]), let action = PenAction(rawValue: pair[1]) else { return }
+        settings.setAction(action, for: slot)
+    }
+
+    @objc private func openAccessibility() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
     }
 
     @objc private func toggleHUD() { settings.showModeHUD.toggle() }

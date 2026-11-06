@@ -31,12 +31,18 @@ final class PresenterHID {
         case gestureBegan
         case gestureEnded
         case connected(Bool)
+        /// Consumer-page key from report 2 (0xE9 volume up, 0xEA volume down); 0 = released.
+        case consumer(UInt16)
     }
 
     static let vendorID = 0x2571
     static let productID = 0x4109
 
     var onEvent: ((Event) -> Void)?
+    /// When the pen did something on its keyboard interface (any report 1/2), for
+    /// telling its keys apart from the Mac keyboard's. Arrives 1–13 ms before the
+    /// system delivers the same key to event taps (measured 2026-11-07).
+    private(set) var lastKeyReportAt: CFAbsoluteTime = 0
 
     private let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
     private var buffers: [UnsafeMutablePointer<UInt8>] = []
@@ -91,8 +97,17 @@ final class PresenterHID {
             }, ctx)
         } else if page == 0x01 && usage == 0x06 {
             IOHIDDeviceRegisterInputReportCallback(device, buf, size, { ctx, _, _, _, reportID, report, length in
-                guard reportID == 4, length >= 2 else { return }
-                Unmanaged<PresenterHID>.fromOpaque(ctx!).takeUnretainedValue().handle(bits: report[1])
+                let me = Unmanaged<PresenterHID>.fromOpaque(ctx!).takeUnretainedValue()
+                switch reportID {
+                case 4 where length >= 2:
+                    me.handle(bits: report[1])
+                case 1:
+                    me.lastKeyReportAt = CFAbsoluteTimeGetCurrent()
+                case 2 where length >= 3:
+                    me.lastKeyReportAt = CFAbsoluteTimeGetCurrent()
+                    me.onEvent?(.consumer(UInt16(report[1]) | UInt16(report[2]) << 8))
+                default: break
+                }
             }, ctx)
             onEvent?(.connected(true))
         }

@@ -6,6 +6,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlay: OverlayController!
     private lazy var hud = ModeHUD()
     private var menu: MenuController!
+    private let router = KeyRouter()
+    private let volumeKeys = VolumeKeys()
     private lazy var pie: PieMenu = {
         let p = PieMenu()
         p.onPick = { [weak self] mode in self?.switchMode(to: mode) }
@@ -32,10 +34,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .volumeDownWhileHeld: self.switchMode(to: self.overlay.settings.mode.previous)
             case .gestureBegan: self.pie.begin()
             case .gestureEnded: self.pie.end()
+            case .consumer(let usage): self.volumeKeys.consumer(usage)
             case .connected(let ok): self.menu.statusLine.title = ok ? "簡報筆：已連線" : "簡報筆：未連線"
             }
         }
         hid.start()
+
+        volumeKeys.action = { [weak self] slot in self?.overlay.settings.action(for: slot) ?? slot.defaultAction }
+        router.passVolumeToSystem = { [weak self] up in self?.volumeKeys.systemHandles(up: up) ?? true }
+        router.lastPenKeyReport = { [weak self] in self?.hid.lastKeyReportAt ?? 0 }
+        router.start() // asks for Accessibility the first time
 
         // `--demo magnifier` shows an effect for 8 s without the pen, for testing.
         let args = CommandLine.arguments
