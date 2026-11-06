@@ -32,6 +32,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         hid.start()
+
+        // `--demo magnifier` shows an effect for 8 s without the pen, for testing.
+        let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "--demo"), i + 1 < args.count,
+           let mode = EffectMode.allCases.first(where: { "\($0)" == args[i + 1] }) {
+            overlay.settings.mode = mode
+            overlay.show()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8) { self.overlay.hide() }
+        }
     }
 
     private func setUpMenu() {

@@ -1,12 +1,13 @@
 import AppKit
 
 enum EffectMode: Int, CaseIterable {
-    case laser, spotlight
+    case laser, spotlight, magnifier
 
     var title: String {
         switch self {
         case .laser: return "雷射點"
         case .spotlight: return "聚光燈"
+        case .magnifier: return "放大鏡"
         }
     }
 
@@ -36,6 +37,8 @@ final class EffectSettings {
     var laserRadius: CGFloat = 14
     var spotlightRadius: CGFloat = 180
     var spotlightDim: CGFloat = 0.75
+    var lensRadius: CGFloat = 170
+    var zoom: CGFloat = 2
 
     /// Page up / page down while holding the mode key.
     func adjust(bigger: Bool) {
@@ -44,6 +47,8 @@ final class EffectSettings {
             laserRadius = (laserRadius + (bigger ? 4 : -4)).clamped(6, 60)
         case .spotlight:
             spotlightRadius = (spotlightRadius + (bigger ? 30 : -30)).clamped(60, 600)
+        case .magnifier:
+            zoom = (zoom + (bigger ? 0.5 : -0.5)).clamped(1.5, 5)
         }
     }
 }
@@ -57,9 +62,14 @@ final class EffectView: NSView {
     /// Cursor position in view coordinates, or nil when the cursor is on another screen.
     var point: NSPoint? { didSet { needsDisplay = true } }
 
+    let lens = LensLayer()
+
     init(frame: NSRect, settings: EffectSettings) {
         self.settings = settings
         super.init(frame: frame)
+        wantsLayer = true
+        lens.isHidden = true
+        layer!.addSublayer(lens)
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -67,7 +77,15 @@ final class EffectView: NSView {
         switch settings.mode {
         case .laser: drawLaser()
         case .spotlight: drawSpotlight()
+        case .magnifier: break // drawn by `lens`
         }
+        updateLens()
+    }
+
+    func updateLens() {
+        guard settings.mode == .magnifier, let p = point else { lens.isHidden = true; return }
+        lens.isHidden = false
+        lens.place(at: p, viewSize: bounds.size, radius: settings.lensRadius, zoom: settings.zoom)
     }
 
     private func drawLaser() {
@@ -111,9 +129,17 @@ final class OverlayController {
     private var windows: [(screen: NSScreen, window: OverlayWindow, view: EffectView)] = []
     private var tracker: Timer?
     private(set) var isShowing = false
+    private let streamer = ScreenStreamer()
+    private var stopStreamWork: DispatchWorkItem?
 
     init() {
         rebuild()
+        streamer.onFrame = { [weak self] surface in
+            guard let self else { return }
+            for w in self.windows where w.screen.displayID == self.streamer.displayID {
+                w.view.lens.contents = surface
+            }
+        }
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
                                                object: nil, queue: .main) { [weak self] _ in self?.rebuild() }
     }
@@ -140,6 +166,12 @@ final class OverlayController {
         isShowing = false
         tracker?.invalidate(); tracker = nil
         windows.forEach { $0.view.point = nil; $0.window.orderOut(nil) }
+        // Keep capturing a few seconds so the next hold shows the lens instantly,
+        // then stop so the screen-recording indicator goes away.
+        stopStreamWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.streamer.stop() }
+        stopStreamWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: work)
     }
 
     func redraw() { windows.forEach { $0.view.needsDisplay = true } }
@@ -150,6 +182,10 @@ final class OverlayController {
             let p: NSPoint? = w.screen.frame.contains(mouse)
                 ? NSPoint(x: mouse.x - w.screen.frame.minX, y: mouse.y - w.screen.frame.minY) : nil
             if p != w.view.point { w.view.point = p }
+            if p != nil, settings.mode == .magnifier, let id = w.screen.displayID {
+                stopStreamWork?.cancel()
+                streamer.start(displayID: id)
+            }
         }
     }
 }
@@ -199,5 +235,11 @@ final class ModeHUD {
         }
         hideWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+    }
+}
+
+extension NSScreen {
+    var displayID: CGDirectDisplayID? {
+        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber).map { CGDirectDisplayID($0.uint32Value) }
     }
 }
