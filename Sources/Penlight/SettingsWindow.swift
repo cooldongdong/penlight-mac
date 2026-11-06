@@ -192,7 +192,7 @@ private struct OnboardingView: View {
                 Image(systemName: "laser.burst").font(.system(size: 34)).foregroundStyle(Color.accentColor)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("歡迎使用 Penlight").font(.system(size: 20, weight: .semibold))
-                    Text("開好這三個權限就能開始。").font(.system(size: 13)).foregroundStyle(.secondary)
+                    Text("開好這兩個權限就能開始。").font(.system(size: 13)).foregroundStyle(.secondary)
                 }
             }
             PermissionsList(state: state)

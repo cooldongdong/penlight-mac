@@ -3,71 +3,63 @@ import Combine
 import IOKit.hid
 import ApplicationServices
 
-/// The three macOS permissions Penlight needs, with live status.
+/// The macOS permissions Penlight needs, with live status.
+///
+/// Input Monitoring is deliberately not on the list: Accessibility already lets an
+/// app read keyboard and mouse input, and macOS then doesn't list it under Input
+/// Monitoring at all (measured 2026-11-07: ListenEvent reset, Accessibility on →
+/// both IOHIDCheckAccess and CGPreflightListenEventAccess report granted and the
+/// pen works). Asking for one permission instead of two also avoids
+/// IOHIDRequestAccess failing to add the app to the Input Monitoring list.
 enum Permission: String, CaseIterable, Identifiable {
-    case inputMonitoring, screenRecording, accessibility
+    case accessibility, screenRecording
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .inputMonitoring: return "輸入監控"
-        case .screenRecording: return "螢幕與系統錄音"
         case .accessibility: return "輔助使用"
+        case .screenRecording: return "螢幕與系統錄音"
         }
     }
 
     /// One line on why: what stops working without it.
     var reason: String {
         switch self {
-        case .inputMonitoring: return "讀取簡報筆的按鍵。沒有它，Penlight 完全收不到簡報筆。"
+        case .accessibility: return "讀取簡報筆的按鍵，以及點擊、放映、指標速度。"
         case .screenRecording: return "放大鏡要看得到螢幕；也用來辨認 Google 簡報。"
-        case .accessibility: return "音量鍵的點擊與指揮中心、Google 簡報放映、指標速度。"
         }
     }
 
     var symbol: String {
         switch self {
-        case .inputMonitoring: return "keyboard"
-        case .screenRecording: return "rectangle.dashed.badge.record"
         case .accessibility: return "accessibility"
+        case .screenRecording: return "rectangle.dashed.badge.record"
         }
     }
 
     var isGranted: Bool {
         switch self {
-        case .inputMonitoring:
-            return IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted || CGPreflightListenEventAccess()
-        case .screenRecording: return CGPreflightScreenCaptureAccess()
         case .accessibility: return AXIsProcessTrusted()
+        case .screenRecording: return CGPreflightScreenCaptureAccess()
         }
     }
 
-    /// Input Monitoring and Screen Recording only take effect after a relaunch.
-    var needsRelaunch: Bool { self != .accessibility }
+    /// The pen's HID connection and screen capture are set up at launch, so both
+    /// only take full effect after a relaunch.
+    var needsRelaunch: Bool { true }
 
     /// Asks macOS (shows the system prompt the first time), then opens the right pane.
     func request() {
         switch self {
-        case .inputMonitoring:
-            // IOHIDRequestAccess alone did not add Penlight to the Input Monitoring list
-            // (2026-11-07, macOS 26.6). Also try the CoreGraphics request; whether that
-            // one registers the app on a fresh install is not verified yet.
-            CGRequestListenEventAccess()
-            IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
-        case .screenRecording: CGRequestScreenCaptureAccess()
         case .accessibility:
             AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary)
+        case .screenRecording: CGRequestScreenCaptureAccess()
         }
         openSettings()
     }
 
     func openSettings() {
-        let anchor: String
-        switch self {
-        case .inputMonitoring: anchor = "Privacy_ListenEvent"
-        case .screenRecording: anchor = "Privacy_ScreenCapture"
-        case .accessibility: anchor = "Privacy_Accessibility"
-        }
+        let anchor = self == .accessibility ? "Privacy_Accessibility" : "Privacy_ScreenCapture"
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")!)
     }
 }
@@ -86,6 +78,15 @@ final class AppState: ObservableObject {
     init() {
         refresh()
         launchGranted = granted
+        Self.logRawStatus()
+    }
+
+    /// Each underlying API on its own, to catch one of them lying.
+    static func logRawStatus() {
+        let hid = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent)
+        let hidText = hid == kIOHIDAccessTypeGranted ? "granted" : hid == kIOHIDAccessTypeDenied ? "denied" : "unknown"
+        penlightLog("permissions: IOHIDCheckAccess=\(hidText) CGPreflightListenEvent=\(CGPreflightListenEventAccess()) "
+            + "CGPreflightScreenCapture=\(CGPreflightScreenCaptureAccess()) AXTrusted=\(AXIsProcessTrusted())")
     }
 
     var allGranted: Bool { Permission.allCases.allSatisfy { granted[$0] == true } }

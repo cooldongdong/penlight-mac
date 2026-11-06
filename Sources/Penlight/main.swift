@@ -20,7 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlay = OverlayController()
         status = StatusController(settings: overlay.settings, state: state, overlay: overlay)
         // Permissions are asked for by the onboarding window, not by surprise prompts.
-        if !state.allGranted { onboarding.show() }
+        if !state.allGranted || CommandLine.arguments.contains("--onboarding") { onboarding.show() }
 
         hid.onEvent = { [weak self] event in
             guard let self else { return }
