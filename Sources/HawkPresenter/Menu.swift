@@ -10,6 +10,7 @@ final class MenuController: NSObject, NSMenuDelegate {
     private var colorItems: [NSMenuItem] = []
     private let dimSlider = NSSlider(value: 0.75, minValue: 0.2, maxValue: 0.95, target: nil, action: nil)
     private var previewWork: DispatchWorkItem?
+    private let hudItem = NSMenuItem(title: "切換時顯示模式名稱", action: #selector(toggleHUD), keyEquivalent: "")
 
     init(overlay: OverlayController) {
         self.overlay = overlay
@@ -28,6 +29,8 @@ final class MenuController: NSObject, NSMenuDelegate {
             modeItems.append(item)
             menu.addItem(item)
         }
+        hudItem.target = self
+        menu.addItem(hudItem)
         menu.addItem(.separator())
 
         let colorMenu = NSMenu()
@@ -68,7 +71,10 @@ final class MenuController: NSObject, NSMenuDelegate {
         let hex = settings.laserColor.hexRGB
         colorItems.forEach { $0.state = EffectSettings.laserPresets[$0.tag].1.hexRGB == hex ? .on : .off }
         dimSlider.doubleValue = Double(settings.spotlightDim)
+        hudItem.state = settings.showModeHUD ? .on : .off
     }
+
+    @objc private func toggleHUD() { settings.showModeHUD.toggle() }
 
     @objc private func pickMode(_ sender: NSMenuItem) {
         settings.mode = EffectMode(rawValue: sender.tag) ?? .laser

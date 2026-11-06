@@ -16,6 +16,8 @@ final class EffectSettings {
     var lensRadius: CGFloat { didSet { save(lensRadius, "lensRadius") } }
     var zoom: CGFloat { didSet { save(zoom, "zoom") } }
     var pointerHaloRadius: CGFloat { didSet { save(pointerHaloRadius, "pointerHaloRadius") } }
+    /// Flash the new mode's name in the middle of the screen after switching.
+    var showModeHUD: Bool { didSet { defaults.set(showModeHUD, forKey: "showModeHUD") } }
 
     static let laserPresets: [(String, NSColor)] = [
         ("紅", .systemRed), ("綠", .systemGreen), ("藍", .systemBlue),
@@ -35,6 +37,7 @@ final class EffectSettings {
         lensRadius = load("lensRadius", 170)
         zoom = load("zoom", 2)
         pointerHaloRadius = load("pointerHaloRadius", 30)
+        showModeHUD = d.bool(forKey: "showModeHUD") // off unless turned on
     }
 
     private func save(_ v: CGFloat, _ key: String) { defaults.set(Double(v), forKey: key) }

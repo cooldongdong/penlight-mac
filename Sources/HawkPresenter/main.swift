@@ -48,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func switchMode(to mode: EffectMode) {
         overlay.settings.mode = mode
         overlay.modeChanged()
-        hud.flash(mode.title)
+        if overlay.settings.showModeHUD { hud.flash(mode.title) }
     }
 
     // MARK: Page up/down while holding: one step on press, then continuous while held.
