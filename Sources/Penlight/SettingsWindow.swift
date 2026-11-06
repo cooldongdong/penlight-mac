@@ -48,23 +48,45 @@ struct PermissionsList: View {
     }
 }
 
+// MARK: - Laser image chooser
+
+enum LaserImageChooser {
+    private static var panel: NSOpenPanel?
+
+    /// Shown after the current SwiftUI update finishes (running a modal panel from
+    /// inside onChange/a binding can fail silently), as a normal front window.
+    static func choose(_ settings: EffectSettings, slot: EffectSettings.ImageSlot = .laser) {
+        DispatchQueue.main.async {
+            guard panel == nil else { panel?.makeKeyAndOrderFront(nil); return }
+            let p = NSOpenPanel()
+            p.allowedContentTypes = [.image]
+            p.allowsMultipleSelection = false
+            p.canChooseDirectories = false
+            p.message = slot == .laser ? "選一張圖當雷射點（建議用去背的 PNG）" : "選一張圖給「圖片」模式"
+            p.prompt = "使用這張圖"
+            panel = p
+            NSApp.activate(ignoringOtherApps: true)
+            p.begin { response in
+                if response == .OK, let url = p.url {
+                    if !settings.setImage(slot, from: url) { penlightLog("laser image: could not read \(url.lastPathComponent)") }
+                } else if slot == .laser, settings.laserImage == nil {
+                    settings.useLaserImage = false
+                }
+                panel = nil
+            }
+            p.orderFrontRegardless()
+            penlightLog("laser image chooser shown: visible=\(p.isVisible)")
+        }
+    }
+}
+
 // MARK: - Settings tabs
 
 private struct GeneralTab: View {
     @ObservedObject var settings: EffectSettings
 
-    private func chooseImage() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = false
-        panel.message = "選一張圖當雷射點（建議用去背的 PNG）"
-        NSApp.activate(ignoringOtherApps: true)
-        if panel.runModal() == .OK, let url = panel.url {
-            settings.setLaserImage(from: url)
-        } else if settings.laserImage == nil {
-            settings.useLaserImage = false
-        }
-    }
+    private func chooseImage() { LaserImageChooser.choose(settings) }
+    private func chooseStamp() { LaserImageChooser.choose(settings, slot: .stamp) }
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginError: String?
 
@@ -95,6 +117,22 @@ private struct GeneralTab: View {
                     }
                 }
                 .disabled(!settings.useLaserImage)
+            }
+            Section("圖片模式") {
+                HStack(alignment: .center) {
+                    Text("圖片")
+                    Spacer()
+                    HStack(spacing: 10) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.06))
+                            if let img = settings.stampImage {
+                                Image(nsImage: img).resizable().scaledToFit().padding(3)
+                            }
+                        }
+                        .frame(width: 32, height: 32)
+                        Button("選擇圖片…", action: chooseStamp)
+                    }
+                }
             }
             Section("顯示") {
                 Toggle("切換模式時顯示模式名稱", isOn: $settings.showModeHUD)
@@ -222,7 +260,7 @@ final class SettingsWindowController: NSWindowController {
     enum Tab: Int, CaseIterable { case general, keys, pie, permissions, about }
 
     private let tabs = SettingsTabs()
-    private static let size = NSSize(width: 560, height: 380)
+    private static let size = NSSize(width: 560, height: 480)
 
     init(settings: EffectSettings, state: AppState) {
         tabs.tabStyle = .toolbar

@@ -80,6 +80,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
            let mode = EffectMode.allCases.first(where: { "\($0)" == args[i + 1] }) {
             overlay.preview(mode: mode, for: 8)
         }
+        // `--choose-image` opens the laser image chooser, for testing.
+        if args.contains("--choose-image") {
+            status.openSettings(.general)
+            LaserImageChooser.choose(overlay.settings)
+        }
         // `--settings <0-3>` opens the Settings window on a tab, for screenshots.
         if let i = args.firstIndex(of: "--settings"), i + 1 < args.count,
            let n = Int(args[i + 1]), let tab = SettingsWindowController.Tab(rawValue: n) {

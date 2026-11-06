@@ -2,7 +2,7 @@ import AppKit
 import Combine
 
 enum EffectMode: Int, CaseIterable, Codable {
-    case laser, spotlight, magnifier, pointer
+    case laser, spotlight, magnifier, pointer, image
 
     var title: String {
         switch self {
@@ -10,6 +10,7 @@ enum EffectMode: Int, CaseIterable, Codable {
         case .spotlight: return "聚光燈"
         case .magnifier: return "放大鏡"
         case .pointer: return "滑鼠"
+        case .image: return "圖片"
         }
     }
 
@@ -20,6 +21,7 @@ enum EffectMode: Int, CaseIterable, Codable {
         case .spotlight: return "flashlight.on.fill"
         case .magnifier: return "plus.magnifyingglass"
         case .pointer: return "cursorarrow"
+        case .image: return "photo"
         }
     }
 
@@ -71,6 +73,7 @@ final class EffectView: NSView {
         case .spotlight: drawSpotlight()
         case .magnifier: break // drawn by `lens`
         case .pointer: drawPointerHalo()
+        case .image: drawImageMode()
         }
         updateLens()
     }
@@ -100,6 +103,27 @@ final class EffectView: NSView {
         NSBezierPath(ovalIn: circle(p, r)).fill()
         NSColor.white.withAlphaComponent(0.85).setFill()
         NSBezierPath(ovalIn: circle(p, r * 0.35)).fill()
+    }
+
+    /// A big picture at the cursor (logo, sticker…); placeholder until one is chosen.
+    private func drawImageMode() {
+        guard let p = point else { return }
+        let box = settings.imageModeSize
+        guard let image = settings.stampImage else {
+            let rect = NSRect(x: p.x - box / 2, y: p.y - box / 2, width: box, height: box)
+            let path = NSBezierPath(roundedRect: rect, xRadius: 14, yRadius: 14)
+            path.setLineDash([8, 6], count: 2, phase: 0)
+            path.lineWidth = 2
+            NSColor.white.withAlphaComponent(0.7).setStroke()
+            path.stroke()
+            let text = NSAttributedString(string: "在 Penlight 設定裡選一張圖", attributes: [
+                .font: NSFont.systemFont(ofSize: 14, weight: .medium), .foregroundColor: NSColor.white,
+            ])
+            text.draw(at: NSPoint(x: p.x - text.size().width / 2, y: p.y - text.size().height / 2))
+            return
+        }
+        let s = image.size, k = min(box / max(s.width, 1), box / max(s.height, 1))
+        image.draw(in: NSRect(x: p.x - s.width * k / 2, y: p.y - s.height * k / 2, width: s.width * k, height: s.height * k))
     }
 
     /// Soft ring around the real cursor so the audience can find it.

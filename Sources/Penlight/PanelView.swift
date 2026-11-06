@@ -93,6 +93,20 @@ struct PanelView: View {
             case .magnifier:
                 row("倍率") { slider($settings.zoom, 1.5...5, preview: .magnifier) }
                 row("鏡片") { slider($settings.lensRadius, 100...320, preview: .magnifier) }
+            case .image:
+                row("圖片") {
+                    HStack(spacing: 8) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.07))
+                            if let img = settings.stampImage { Image(nsImage: img).resizable().scaledToFit() }
+                        }
+                        .frame(width: 22, height: 22)
+                        Button("選擇…") { LaserImageChooser.choose(settings, slot: .stamp) }
+                            .buttonStyle(.borderless).font(.system(size: 12))
+                        Spacer(minLength: 0)
+                    }
+                }
+                row("大小") { slider($settings.imageModeSize, 60...900, preview: .image) }
             case .pointer:
                 row("顏色") { swatches }
                 row("光暈") { slider($settings.pointerHaloRadius, 16...90, preview: .pointer) }

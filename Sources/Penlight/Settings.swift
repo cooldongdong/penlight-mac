@@ -22,6 +22,9 @@ final class EffectSettings: ObservableObject {
     /// Laser drawn as the user's own image instead of the dot.
     @Published var useLaserImage: Bool { didSet { defaults.set(useLaserImage, forKey: "useLaserImage") } }
     @Published private(set) var laserImage: NSImage?
+    /// Image mode: its own picture, shown much larger than the laser.
+    @Published private(set) var stampImage: NSImage?
+    @Published var imageModeSize: CGFloat { didSet { save(imageModeSize, "imageModeSize") } }
     @Published var showModeHUD: Bool { didSet { defaults.set(showModeHUD, forKey: "showModeHUD") } }
     /// Multiplier for the pen's gyro motion only (Mac trackpad / mouse unaffected).
     @Published var pointerSpeed: CGFloat { didSet { save(pointerSpeed, "pointerSpeed") } }
@@ -50,26 +53,37 @@ final class EffectSettings: ObservableObject {
         pointerSpeed = load("pointerSpeed", 1)
         useLaserImage = d.bool(forKey: "useLaserImage")
         laserImage = NSImage(contentsOf: Self.laserImageURL)
+        stampImage = NSImage(contentsOf: Self.imageURL("stamp.png"))
+        imageModeSize = load("imageModeSize", 240)
     }
 
     private func save(_ v: CGFloat, _ key: String) { defaults.set(Double(v), forKey: key) }
 
     /// Our own copy, so moving or deleting the original doesn't break the pointer.
-    static var laserImageURL: URL {
+    static func imageURL(_ name: String) -> URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Penlight", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("pointer.png")
+        return dir.appendingPathComponent(name)
     }
+    static var laserImageURL: URL { imageURL("pointer.png") }
 
-    /// Copies the picked file as PNG and switches the laser to it. Returns false if unreadable.
+    enum ImageSlot { case laser, stamp }
+
+    /// Copies the picked file as PNG into our folder. Returns false if unreadable.
     @discardableResult
-    func setLaserImage(from url: URL) -> Bool {
+    func setImage(_ slot: ImageSlot, from url: URL) -> Bool {
+        let dest = slot == .laser ? Self.laserImageURL : Self.imageURL("stamp.png")
         guard let image = NSImage(contentsOf: url), let tiff = image.tiffRepresentation,
               let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]),
-              (try? png.write(to: Self.laserImageURL)) != nil else { return false }
-        laserImage = NSImage(contentsOf: Self.laserImageURL)
-        useLaserImage = true
+              (try? png.write(to: dest)) != nil else { return false }
+        switch slot {
+        case .laser:
+            laserImage = NSImage(contentsOf: dest)
+            useLaserImage = true
+        case .stamp:
+            stampImage = NSImage(contentsOf: dest)
+        }
         return true
     }
 
@@ -91,6 +105,7 @@ final class EffectSettings: ObservableObject {
         case .spotlight: spotlightRadius = (spotlightRadius + 30 * s).clamped(60, 600)
         case .magnifier: zoom = (zoom + 0.5 * s).clamped(1.5, 5)
         case .pointer: pointerHaloRadius = (pointerHaloRadius + 6 * s).clamped(16, 90)
+        case .image: imageModeSize = (imageModeSize + 60 * s).clamped(60, 900) // big steps
         }
     }
 }
