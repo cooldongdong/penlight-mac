@@ -20,7 +20,7 @@ final class KeyRouter {
     var onInstalled: (() -> Void)?
 
     /// Log every pen key (Penlight.log) while diagnosing.
-    var debugKeys = true
+    var debugKeys = false
     private var tap: CFMachPort?
     private var retry: Timer?
     private let penKeyboardType: Int64 = 40

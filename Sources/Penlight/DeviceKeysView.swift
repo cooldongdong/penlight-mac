@@ -49,34 +49,37 @@ struct DeviceKeysView: View {
     }
 }
 
-/// Front view of the DR550DL, drawn from proportions measured on a photo of the
-/// real device (our own drawing; no vendor artwork or logo).
+/// Front view of the DR550DL, drawn from measurements of a photo of the real
+/// device (our own drawing; no vendor artwork or logo).
 ///
-/// Every position comes from one table of fractions of the body height, so keys,
-/// side buttons and their labels can't drift out of line with each other.
+/// Measured on a 168×625 px photo: body 116×540 px (1 : 4.66). Every size and
+/// position below is a fraction of the body's width (W) or height (H), so keys,
+/// side buttons and labels can't drift out of line with each other.
 struct PresenterDiagram: View {
     @Binding var selected: PenButton
 
-    // Body: about 1 : 6.6 on the photo.
-    private let bodyW: CGFloat = 54
-    private let bodyH: CGFloat = 340
-    private let top: CGFloat = 6
+    private let bodyH: CGFloat = 310
+    private var bodyW: CGFloat { bodyH / 4.66 }
+    private let top: CGFloat = 4
 
-    /// Vertical centres, as a fraction of the body height (measured on the photo).
-    private enum Y {
-        static let led: CGFloat = 0.065
-        static let mode: CGFloat = 0.21
-        static let pageUp: CGFloat = 0.35
-        static let pageDown: CGFloat = 0.48
-        static let laser: CGFloat = 0.60
-        static let volumeUp: CGFloat = 0.30   // right edge, between mode and page-up
-        static let volumeDown: CGFloat = 0.43 // right edge, between page-up and page-down
-        static let leftRidge: CGFloat = 0.17  // left edge, decorative
+    private struct Key {
+        let button: PenButton
+        let symbol: String
+        let centerY: CGFloat      // fraction of H
+        let size: CGSize          // fractions of W (width) and H (height)
+        var tint: Color = .white
     }
 
-    private var keyW: CGFloat { bodyW * 0.72 }
-    private var keyH: CGFloat { keyW * 0.70 }
-    private var sideLen: CGFloat { bodyH * 0.065 }
+    // Page keys are larger (59×47 px) than mode / laser (47×34 px).
+    private let keys: [Key] = [
+        Key(button: .mode, symbol: "smallcircle.filled.circle", centerY: 0.147, size: CGSize(width: 0.405, height: 0.063)),
+        Key(button: .pageUp, symbol: "chevron.up", centerY: 0.259, size: CGSize(width: 0.509, height: 0.087)),
+        Key(button: .pageDown, symbol: "chevron.down", centerY: 0.381, size: CGSize(width: 0.509, height: 0.087)),
+        Key(button: .laser, symbol: "sun.max", centerY: 0.494, size: CGSize(width: 0.405, height: 0.063), tint: .green),
+    ]
+    private let ledY: CGFloat = 0.057
+    private let volumeUpY: CGFloat = 0.209, volumeDownY: CGFloat = 0.322, sideLen: CGFloat = 0.076
+    private let ridgeY: CGFloat = 0.159, ridgeLen: CGFloat = 0.113
 
     private func y(_ f: CGFloat) -> CGFloat { top + bodyH * f }
 
@@ -86,73 +89,68 @@ struct PresenterDiagram: View {
             let right = cx + bodyW / 2
             let left = cx - bodyW / 2
             ZStack {
-                // Plug, behind the body
-                RoundedRectangle(cornerRadius: 3).fill(Color(white: 0.08))
-                    .frame(width: bodyW * 0.36, height: 20)
-                    .position(x: cx, y: top + bodyH + 6)
+                // Plug (0.405 W wide), tucked behind the body
+                RoundedRectangle(cornerRadius: 3).fill(Color(white: 0.07))
+                    .frame(width: bodyW * 0.405, height: bodyH * 0.10)
+                    .position(x: cx, y: top + bodyH + bodyH * 0.04)
                 // Body
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(white: 0.27), Color(white: 0.19), Color(white: 0.23)],
+                RoundedRectangle(cornerRadius: bodyW * 0.11, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(white: 0.33), Color(white: 0.29), Color(white: 0.19)],
                                          startPoint: .leading, endPoint: .trailing))
-                    .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).stroke(Color.white.opacity(0.09)))
+                    .overlay(RoundedRectangle(cornerRadius: bodyW * 0.11, style: .continuous).stroke(Color.white.opacity(0.08)))
                     .frame(width: bodyW, height: bodyH)
                     .position(x: cx, y: top + bodyH / 2)
-                // Status light
-                Circle().fill(Color(white: 0.10)).frame(width: 4, height: 4)
-                    .position(x: cx, y: y(Y.led))
+                Circle().fill(Color(white: 0.08)).frame(width: 4, height: 4)
+                    .position(x: cx, y: y(ledY))
                 // Left ridge (not a button)
-                Capsule().fill(Color(white: 0.30)).frame(width: 3, height: sideLen * 0.8)
-                    .position(x: left - 1, y: y(Y.leftRidge))
-                // Face keys
-                faceKey(.mode, "smallcircle.filled.circle", at: CGPoint(x: cx, y: y(Y.mode)))
-                faceKey(.pageUp, "chevron.up", at: CGPoint(x: cx, y: y(Y.pageUp)))
-                faceKey(.pageDown, "chevron.down", at: CGPoint(x: cx, y: y(Y.pageDown)))
-                faceKey(.laser, "sun.max", at: CGPoint(x: cx, y: y(Y.laser)), tint: .green)
-                // Side keys, each label centred on its key
-                sideKey(.volumeUp, "＋", edgeX: right, centerY: y(Y.volumeUp))
-                sideKey(.volumeDown, "−", edgeX: right, centerY: y(Y.volumeDown))
+                Capsule().fill(Color(white: 0.26)).frame(width: 3, height: bodyH * ridgeLen)
+                    .position(x: left - 0.5, y: y(ridgeY))
+                ForEach(keys, id: \.button) { key in faceKey(key, cx: cx) }
+                sideKey(.volumeUp, "＋", edgeX: right, centerY: y(volumeUpY))
+                sideKey(.volumeDown, "−", edgeX: right, centerY: y(volumeDownY))
             }
         }
-        .frame(height: top + bodyH + 20)
+        .frame(height: top + bodyH + bodyH * 0.10)
     }
 
-    private func faceKey(_ button: PenButton, _ symbol: String, at p: CGPoint, tint: Color = .white) -> some View {
-        let on = selected == button
-        return Button { selected = button } label: {
-            RoundedRectangle(cornerRadius: keyH * 0.28, style: .continuous)
-                .fill(LinearGradient(colors: [Color(white: 0.13), Color(white: 0.07)], startPoint: .top, endPoint: .bottom))
-                .overlay(RoundedRectangle(cornerRadius: keyH * 0.28, style: .continuous).stroke(Color.white.opacity(0.06)))
-                .overlay(Image(systemName: symbol).font(.system(size: 11, weight: .bold)).foregroundStyle(tint.opacity(0.9)))
-                .frame(width: keyW, height: keyH)
-                .overlay(RoundedRectangle(cornerRadius: keyH * 0.28 + 3, style: .continuous)
+    private func faceKey(_ key: Key, cx: CGFloat) -> some View {
+        let on = selected == key.button
+        let w = bodyW * key.size.width, h = bodyH * key.size.height, r = h * 0.24
+        return Button { selected = key.button } label: {
+            RoundedRectangle(cornerRadius: r, style: .continuous)
+                .fill(LinearGradient(colors: [Color(white: 0.16), Color(white: 0.09)], startPoint: .top, endPoint: .bottom))
+                .overlay(RoundedRectangle(cornerRadius: r, style: .continuous).stroke(Color.white.opacity(0.07)))
+                .overlay(Image(systemName: key.symbol).font(.system(size: 10, weight: .bold)).foregroundStyle(key.tint.opacity(0.9)))
+                .frame(width: w, height: h)
+                .overlay(RoundedRectangle(cornerRadius: r + 3, style: .continuous)
                     .stroke(Color.accentColor, lineWidth: on ? 2.5 : 0)
-                    .frame(width: keyW + 6, height: keyH + 6))
-                .frame(width: keyW + 10, height: keyH + 10)
+                    .frame(width: w + 6, height: h + 6))
+                .frame(width: w + 10, height: h + 10)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(button.title)
-        .position(p)
+        .help(key.button.title)
+        .position(x: cx, y: y(key.centerY))
     }
 
-    /// The key sits on the body's edge; the label sits right of it on the same centre line.
+    /// The key straddles the body's right edge; its label sits on the same centre line.
     private func sideKey(_ button: PenButton, _ label: String, edgeX: CGFloat, centerY: CGFloat) -> some View {
         let on = selected == button
         let keyWidth: CGFloat = 4, labelWidth: CGFloat = 14, gap: CGFloat = 7
+        let len = bodyH * sideLen
         return Button { selected = button } label: {
             HStack(alignment: .center, spacing: gap) {
-                Capsule().fill(on ? Color.accentColor : Color(white: 0.36))
-                    .frame(width: keyWidth, height: sideLen)
+                Capsule().fill(on ? Color.accentColor : Color(white: 0.30))
+                    .frame(width: keyWidth, height: len)
                 Text(label).font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(on ? Color.accentColor : Color.secondary)
-                    .frame(width: labelWidth, height: sideLen)
+                    .frame(width: labelWidth, height: len)
             }
             .padding(.trailing, 6)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(button.title)
-        // HStack is centred on .position; shift so the capsule straddles the edge.
-        .position(x: edgeX + (keyWidth + gap + labelWidth + 6) / 2 - 1, y: centerY)
+        .position(x: edgeX + (keyWidth + gap + labelWidth + 6) / 2 - 1.5, y: centerY)
     }
 }
