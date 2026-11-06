@@ -35,8 +35,9 @@ struct DeviceKeysView: View {
             ForEach(selected.slots, id: \.self) { slot in
                 HStack(spacing: 10) {
                     Text(slot.title).font(.system(size: 12)).foregroundStyle(.secondary)
-                        .frame(width: 88, alignment: .leading)
-                    ActionPicker(settings: settings, slot: slot, showsLabel: false, inline: (picker: 150, recorder: 64))
+                        .frame(width: 84, alignment: .leading)
+                    // 84 + 10 + 168 + 8 + 58 + padding 36 = 364 ≤ 369 available: the diagram is never squeezed.
+                    ActionPicker(settings: settings, slot: slot, showsLabel: false, inline: (picker: 168, recorder: 58))
                 }
                 .frame(height: 34)
             }

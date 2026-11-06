@@ -275,37 +275,103 @@ struct PreviewStage: View {
     }
 }
 
-/// A plausible slide: title, bullets, a small chart.
+/// A believable keynote-style slide: eyebrow, headline, one line of support,
+/// three figures, and a quarterly chart with the latest quarter highlighted.
 private struct MockSlide: View {
     let dark: Bool
 
+    private var fg: Color { dark ? Color(white: 0.96) : Color(red: 0.08, green: 0.08, blue: 0.10) }
+    private var sub: Color { dark ? Color(white: 0.62) : Color(white: 0.42) }
+    private var faint: Color { dark ? Color.white.opacity(0.13) : Color.black.opacity(0.09) }
+    private let accent = Color(red: 0.37, green: 0.36, blue: 0.95) // indigo: reads on light and dark
+
+    private let quarters: [(String, CGFloat)] = [("Q4", 0.46), ("Q1", 0.58), ("Q2", 0.66), ("Q3", 0.92)]
+
     var body: some View {
-        let fg = dark ? Color.white : Color(white: 0.12)
-        let sub = dark ? Color.white.opacity(0.65) : Color(white: 0.35)
-        ZStack(alignment: .topLeading) {
-            (dark ? Color(white: 0.11) : Color.white)
-            HStack(alignment: .top, spacing: 18) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("第三季回顧").font(.system(size: 17, weight: .bold)).foregroundStyle(fg)
-                    ForEach(["營收成長 18%", "新客戶 42 家", "續約率 91%"], id: \.self) { line in
-                        HStack(spacing: 6) {
-                            Circle().fill(sub).frame(width: 4, height: 4)
-                            Text(line).font(.system(size: 11)).foregroundStyle(sub)
-                        }
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            ZStack(alignment: .topLeading) {
+                background
+                // Left column
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Q3 REVIEW")
+                        .font(.system(size: 8.5, weight: .semibold)).tracking(1.8)
+                        .foregroundStyle(accent)
+                    Text("Growth that\ncompounds.")
+                        .font(.system(size: 23, weight: .bold)).tracking(-0.6)
+                        .lineSpacing(-3)
+                        .foregroundStyle(fg)
+                        .padding(.top, 7)
+                    Text("Revenue up 18% while retention hit a record high.")
+                        .font(.system(size: 9.5)).foregroundStyle(sub)
+                        .lineLimit(2).frame(width: w * 0.36, alignment: .leading)
+                        .padding(.top, 8)
+                    Spacer(minLength: 0)
+                    HStack(alignment: .top, spacing: 18) {
+                        figure("+18%", "Revenue")
+                        figure("42", "New clients")
+                        figure("91%", "Retention")
                     }
                 }
-                Spacer(minLength: 0)
-                HStack(alignment: .bottom, spacing: 7) {
-                    ForEach(Array([0.45, 0.6, 0.52, 0.85].enumerated()), id: \.offset) { i, v in
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(i == 3 ? Color.accentColor : sub.opacity(0.45))
-                            .frame(width: 16, height: 90 * v)
-                    }
-                }
-                .frame(height: 90, alignment: .bottom)
-                .padding(.top, 34)
+                .padding(.horizontal, 24).padding(.vertical, 22)
+                .frame(width: w * 0.52, height: h, alignment: .topLeading)
+
+                // Right column: chart
+                chart(height: h * 0.52)
+                    .frame(width: w * 0.34, height: h * 0.52 + 30, alignment: .bottom)
+                    .position(x: w * 0.77, y: h * 0.56)
+
+                Text("12").font(.system(size: 8, weight: .medium)).foregroundStyle(sub.opacity(0.7))
+                    .position(x: w - 18, y: h - 14)
             }
-            .padding(22)
+        }
+    }
+
+    private var background: some View {
+        ZStack {
+            if dark {
+                LinearGradient(colors: [Color(red: 0.09, green: 0.09, blue: 0.11), Color(red: 0.05, green: 0.05, blue: 0.06)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                RadialGradient(colors: [accent.opacity(0.16), .clear], center: UnitPoint(x: 0.85, y: 0.15),
+                               startRadius: 0, endRadius: 260)
+            } else {
+                LinearGradient(colors: [Color(red: 1, green: 1, blue: 0.99), Color(red: 0.955, green: 0.953, blue: 0.94)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
+        }
+    }
+
+    private func figure(_ value: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value).font(.system(size: 15, weight: .semibold)).monospacedDigit().foregroundStyle(fg)
+            Text(label).font(.system(size: 7.5, weight: .medium)).foregroundStyle(sub)
+        }
+    }
+
+    private func chart(height: CGFloat) -> some View {
+        VStack(spacing: 5) {
+            HStack(alignment: .bottom, spacing: 10) {
+                ForEach(Array(quarters.enumerated()), id: \.offset) { i, q in
+                    let last = i == quarters.count - 1
+                    VStack(spacing: 4) {
+                        if last {
+                            Text("$4.2M").font(.system(size: 8.5, weight: .semibold)).foregroundStyle(accent)
+                        }
+                        UnevenRoundedRectangle(topLeadingRadius: 3, topTrailingRadius: 3)
+                            .fill(last ? accent : faint)
+                            .frame(height: height * q.1)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            Rectangle().fill(sub.opacity(0.35)).frame(height: 0.75)
+            HStack(spacing: 10) {
+                ForEach(Array(quarters.enumerated()), id: \.offset) { i, q in
+                    Text(q.0).font(.system(size: 7.5, weight: i == quarters.count - 1 ? .semibold : .regular))
+                        .foregroundStyle(i == quarters.count - 1 ? fg : sub)
+                        .frame(maxWidth: .infinity)
+                }
+            }
         }
     }
 }
