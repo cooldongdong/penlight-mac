@@ -43,6 +43,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        SystemCursor.show() // never leave the user without a cursor
+    }
+
     private func setUpMenu() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = NSImage(systemSymbolName: "laser.burst", accessibilityDescription: "Hawk Presenter")

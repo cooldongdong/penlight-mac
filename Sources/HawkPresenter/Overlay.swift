@@ -155,6 +155,7 @@ final class OverlayController {
 
     func show() {
         isShowing = true
+        SystemCursor.hide()
         windows.forEach { $0.window.orderFrontRegardless() }
         tracker?.invalidate()
         tracker = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] _ in self?.update() }
@@ -164,6 +165,7 @@ final class OverlayController {
 
     func hide() {
         isShowing = false
+        SystemCursor.show()
         tracker?.invalidate(); tracker = nil
         windows.forEach { $0.view.point = nil; $0.window.orderOut(nil) }
         // Keep capturing a few seconds so the next hold shows the lens instantly,

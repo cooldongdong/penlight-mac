@@ -5,7 +5,7 @@ Hawk DR550DL 簡報筆的 macOS 原生工具，取代原廠只有 Intel 版、�
 ## 建置
 
 ```sh
-./scripts/build-app.sh   # 產出 build/Hawk Presenter.app（arm64、ad-hoc 簽章）
+./scripts/build-app.sh   # 產出 build/Hawk Presenter.app（arm64，用本機固定簽章）
 ```
 
 第一次建置前先跑一次 `./scripts/make-signing-cert.sh`，建立固定的本機簽章；否則每次重新建置，macOS 都會把它當成新 app，權限會掉。
