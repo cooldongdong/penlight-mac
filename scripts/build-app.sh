@@ -26,5 +26,12 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
-codesign --force --sign - "$APP"
+# Stable identity keeps Input Monitoring across rebuilds (see make-signing-cert.sh).
+IDENTITY="Hawk Presenter Local Signing"
+if security find-certificate -c "$IDENTITY" >/dev/null 2>&1; then
+  codesign --force --sign "$IDENTITY" "$APP"
+else
+  echo "warning: '$IDENTITY' not found, ad-hoc signing; Input Monitoring resets on every rebuild" >&2
+  codesign --force --sign - "$APP"
+fi
 echo "Built: $APP"
