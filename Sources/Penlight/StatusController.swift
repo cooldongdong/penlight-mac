@@ -20,7 +20,6 @@ final class StatusController: NSObject {
         popover.animates = true
         popover.contentViewController = NSHostingController(rootView: PanelView(
             settings: settings, state: state,
-            onPreview: { [weak overlay] mode in overlay?.preview(mode: mode, for: 1.2) },
             onOpenSettings: { [weak self] in self?.openSettings() },
             onOpenPermissions: { [weak self] in self?.openSettings(.permissions) }
         ))

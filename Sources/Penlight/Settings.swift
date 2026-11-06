@@ -31,9 +31,13 @@ final class EffectSettings: ObservableObject {
 
     var isPresetColor: Bool { Self.laserPresets.contains { $0.1.hexRGB == laserColor.hexRGB } }
 
+    /// Seven rainbow hues spaced far apart so no two read alike, at a brightness
+    /// that shows on both light and dark slides (the dot keeps a white core and glow).
     static let laserPresets: [(String, NSColor)] = [
-        ("紅", .systemRed), ("綠", .systemGreen), ("藍", .systemBlue),
-        ("黃", .systemYellow), ("洋紅", .systemPink),
+        ("紅", NSColor(hexRGB: "FF3B30")!), ("橙", NSColor(hexRGB: "FF9500")!),
+        ("黃", NSColor(hexRGB: "FFD60A")!), ("綠", NSColor(hexRGB: "30D158")!),
+        ("青", NSColor(hexRGB: "40C8E0")!), ("藍", NSColor(hexRGB: "0A84FF")!),
+        ("紫", NSColor(hexRGB: "BF5AF2")!),
     ]
 
     init() {

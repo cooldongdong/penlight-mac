@@ -5,13 +5,12 @@ import SwiftUI
 struct PanelView: View {
     @ObservedObject var settings: EffectSettings
     @ObservedObject var state: AppState
-    var onPreview: (EffectMode) -> Void
     var onOpenSettings: () -> Void
     var onOpenPermissions: () -> Void
 
     static let width: CGFloat = 300
     /// Same height for every mode, so switching modes never resizes the panel.
-    private let modeSectionHeight: CGFloat = 64
+    private let modeSectionHeight: CGFloat = 24
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -71,79 +70,15 @@ struct PanelView: View {
         }
     }
 
+    /// One quick control for the current mode; everything else is in Settings → 外觀.
     @ViewBuilder private var modeControls: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            switch settings.mode {
-            case .laser:
-                if settings.useLaserImage, let img = settings.laserImage {
-                    row("圖片") {
-                        HStack(spacing: 8) {
-                            Image(nsImage: img).resizable().scaledToFit().frame(width: 22, height: 22)
-                            Text("自訂圖片").font(.system(size: 12)).foregroundStyle(.secondary)
-                            Spacer(minLength: 0)
-                        }
-                    }
-                } else {
-                    row("顏色") { swatches }
-                }
-                row("大小") { slider($settings.laserRadius, 6...60, preview: .laser) }
-            case .spotlight:
-                row("範圍") { slider($settings.spotlightRadius, 60...600, preview: .spotlight) }
-                row("背景") { slider($settings.spotlightDim, 0.2...0.95, preview: .spotlight) }
-            case .magnifier:
-                row("倍率") { slider($settings.zoom, 1.5...5, preview: .magnifier) }
-                row("鏡片") { slider($settings.lensRadius, 100...320, preview: .magnifier) }
-            case .image:
-                row("圖片") {
-                    HStack(spacing: 8) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.07))
-                            if let img = settings.stampImage { Image(nsImage: img).resizable().scaledToFit() }
-                        }
-                        .frame(width: 22, height: 22)
-                        Button("選擇…") { LaserImageChooser.choose(settings, slot: .stamp) }
-                            .buttonStyle(.borderless).font(.system(size: 12))
-                        Spacer(minLength: 0)
-                    }
-                }
-                row("大小") { slider($settings.imageModeSize, 60...900, preview: .image) }
-            case .pointer:
-                row("顏色") { swatches }
-                row("光暈") { slider($settings.pointerHaloRadius, 16...90, preview: .pointer) }
-            }
+        switch settings.mode {
+        case .laser: row("大小") { slider($settings.laserRadius, 6...60) }
+        case .spotlight: row("範圍") { slider($settings.spotlightRadius, 60...600) }
+        case .magnifier: row("倍率") { slider($settings.zoom, 1.5...5) }
+        case .pointer: row("光暈") { slider($settings.pointerHaloRadius, 16...90) }
+        case .image: row("大小") { slider($settings.imageModeSize, 60...900) }
         }
-    }
-
-    private var swatches: some View {
-        HStack(spacing: 10) {
-            ForEach(EffectSettings.laserPresets, id: \.0) { _, color in
-                swatch(color, selected: settings.laserColor.hexRGB == color.hexRGB) {
-                    settings.laserColor = color
-                }
-            }
-            // Custom colour: the picker's own well, ringed when the colour isn't a preset.
-            ColorPicker("", selection: Binding(
-                get: { Color(nsColor: settings.laserColor) },
-                set: { settings.laserColor = NSColor($0) }
-            ), supportsOpacity: false)
-            .labelsHidden()
-            .frame(width: 22, height: 18)
-            .overlay(Circle().stroke(Color.primary.opacity(settings.isPresetColor ? 0 : 0.8), lineWidth: 2)
-                .frame(width: 24, height: 24).allowsHitTesting(false))
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func swatch(_ color: NSColor, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Circle()
-                .fill(Color(nsColor: color))
-                .frame(width: 18, height: 18)
-                .overlay(Circle().stroke(Color.primary.opacity(selected ? 0.8 : 0), lineWidth: 2).frame(width: 24, height: 24))
-                .frame(width: 24, height: 24)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
     }
 
     private var footer: some View {
@@ -167,11 +102,8 @@ struct PanelView: View {
         .frame(height: 24)
     }
 
-    private func slider(_ value: Binding<CGFloat>, _ range: ClosedRange<Double>, preview: EffectMode? = nil) -> some View {
-        Slider(value: Binding(get: { Double(value.wrappedValue) }, set: {
-            value.wrappedValue = CGFloat($0)
-            if let preview { onPreview(preview) }
-        }), in: range)
+    private func slider(_ value: Binding<CGFloat>, _ range: ClosedRange<Double>) -> some View {
+        Slider(value: Binding(get: { Double(value.wrappedValue) }, set: { value.wrappedValue = CGFloat($0) }), in: range)
         .controlSize(.small)
     }
 }

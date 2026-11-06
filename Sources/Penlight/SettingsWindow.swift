@@ -85,55 +85,11 @@ enum LaserImageChooser {
 private struct GeneralTab: View {
     @ObservedObject var settings: EffectSettings
 
-    private func chooseImage() { LaserImageChooser.choose(settings) }
-    private func chooseStamp() { LaserImageChooser.choose(settings, slot: .stamp) }
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginError: String?
 
     var body: some View {
         Form {
-            Section("雷射點") {
-                Picker("樣式", selection: $settings.useLaserImage) {
-                    Text("圓點").tag(false)
-                    Text("自訂圖片").tag(true)
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: settings.useLaserImage) { on in
-                    if on && settings.laserImage == nil { chooseImage() }
-                }
-                HStack(alignment: .center) {
-                    Text("圖片")
-                    Spacer()
-                    HStack(spacing: 10) {
-                        // Fixed thumbnail slot: empty or filled, nothing moves.
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.06))
-                            if let img = settings.laserImage {
-                                Image(nsImage: img).resizable().scaledToFit().padding(3)
-                            }
-                        }
-                        .frame(width: 32, height: 32)
-                        Button("選擇圖片…", action: chooseImage)
-                    }
-                }
-                .disabled(!settings.useLaserImage)
-            }
-            Section("圖片模式") {
-                HStack(alignment: .center) {
-                    Text("圖片")
-                    Spacer()
-                    HStack(spacing: 10) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.06))
-                            if let img = settings.stampImage {
-                                Image(nsImage: img).resizable().scaledToFit().padding(3)
-                            }
-                        }
-                        .frame(width: 32, height: 32)
-                        Button("選擇圖片…", action: chooseStamp)
-                    }
-                }
-            }
             Section("顯示") {
                 Toggle("切換模式時顯示模式名稱", isOn: $settings.showModeHUD)
             }
@@ -257,7 +213,7 @@ private final class SettingsTabs: NSTabViewController {
 /// Standard macOS settings window: toolbar tabs, one fixed size for every tab
 /// (the window must not jump when switching tabs).
 final class SettingsWindowController: NSWindowController {
-    enum Tab: Int, CaseIterable { case general, keys, pie, permissions, about }
+    enum Tab: Int, CaseIterable { case general, appearance, keys, pie, permissions, about }
 
     private let tabs = SettingsTabs()
     private static let size = NSSize(width: 560, height: 480)
@@ -273,6 +229,7 @@ final class SettingsWindowController: NSWindowController {
             return item
         }
         tabs.addTabViewItem(item("一般", "gearshape", GeneralTab(settings: settings)))
+        tabs.addTabViewItem(item("外觀", "paintpalette", AppearanceTab(settings: settings)))
         tabs.addTabViewItem(item("按鍵", "keyboard", KeysTab(settings: settings)))
         tabs.addTabViewItem(item("圓形選單", "circle.grid.cross", PieTab(settings: settings)))
         tabs.addTabViewItem(item("權限", "lock.shield", PermissionsTab(state: state)))
