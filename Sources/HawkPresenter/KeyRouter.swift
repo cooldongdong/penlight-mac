@@ -14,6 +14,8 @@ final class KeyRouter {
     var passVolumeToSystem: (_ up: Bool) -> Bool = { _ in true }
     var lastPenKeyReport: () -> CFAbsoluteTime = { 0 }
     var googleSlidesEnabled = true
+    /// Fired once the tap is installed, i.e. Accessibility has been granted.
+    var onInstalled: (() -> Void)?
 
     private var tap: CFMachPort?
     private var retry: Timer?
@@ -53,6 +55,7 @@ final class KeyRouter {
         CGEvent.tapEnable(tap: port, enable: true)
         tap = port
         hawkLog("key router installed")
+        onInstalled?()
         return true
     }
 

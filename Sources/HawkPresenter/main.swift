@@ -43,6 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         volumeKeys.action = { [weak self] slot in self?.overlay.settings.action(for: slot) ?? slot.defaultAction }
         router.passVolumeToSystem = { [weak self] up in self?.volumeKeys.systemHandles(up: up) ?? true }
         router.lastPenKeyReport = { [weak self] in self?.hid.lastKeyReportAt ?? 0 }
+        // Pen-only pointer speed: once we may post events, take over the pen's mouse.
+        hid.onMouseDelta = { [weak self] dx, dy in self?.movePointer(dx: dx, dy: dy) }
+        router.onInstalled = { [weak self] in self?.hid.seizeMouse(true) }
         router.start() // asks for Accessibility the first time
 
         // `--demo magnifier` shows an effect for 8 s without the pen, for testing.
@@ -51,6 +54,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
            let mode = EffectMode.allCases.first(where: { "\($0)" == args[i + 1] }) {
             overlay.preview(mode: mode, for: 8)
         }
+    }
+
+    /// Move the cursor by the pen's motion × speed. Small motions are kept precise,
+    /// fast flicks get boosted, roughly like the system's own acceleration.
+    /// Runs on the mouse thread, not the main thread.
+    private var pointerRemainder = CGPoint.zero
+
+    private func movePointer(dx: Int, dy: Int) {
+        guard var loc = CGEvent(source: nil)?.location else { return }
+        let speed = overlay.settings.pointerSpeed
+        let mag = hypot(CGFloat(dx), CGFloat(dy))
+        let gain = speed * (1.3 + min(mag, 24) * 0.12)
+        let mx = CGFloat(dx) * gain + pointerRemainder.x
+        let my = CGFloat(dy) * gain + pointerRemainder.y
+        pointerRemainder = CGPoint(x: mx - mx.rounded(.towardZero), y: my - my.rounded(.towardZero))
+        loc.x += mx.rounded(.towardZero)
+        loc.y += my.rounded(.towardZero)
+        loc = Self.clampToDisplays(loc)
+        let e = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: loc, mouseButton: .left)
+        e?.setIntegerValueField(.mouseEventDeltaX, value: Int64(mx.rounded(.towardZero)))
+        e?.setIntegerValueField(.mouseEventDeltaY, value: Int64(my.rounded(.towardZero)))
+        e?.setIntegerValueField(.eventSourceUserData, value: syntheticEventTag)
+        e?.post(tap: .cghidEventTap)
+    }
+
+    /// Keep a point (global, top-left origin) on some display.
+    private static func clampToDisplays(_ p: CGPoint) -> CGPoint {
+        var count: UInt32 = 0
+        CGGetActiveDisplayList(0, nil, &count)
+        var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        CGGetActiveDisplayList(count, &ids, &count)
+        let rects = ids.map { CGDisplayBounds($0) }
+        if rects.contains(where: { $0.contains(p) }) { return p }
+        // Nearest point on the nearest display.
+        let clamped = rects.map { r in
+            CGPoint(x: min(max(p.x, r.minX), r.maxX - 1), y: min(max(p.y, r.minY), r.maxY - 1))
+        }
+        return clamped.min { hypot($0.x - p.x, $0.y - p.y) < hypot($1.x - p.x, $1.y - p.y) } ?? p
     }
 
     private func switchMode(to mode: EffectMode) {

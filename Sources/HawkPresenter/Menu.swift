@@ -9,6 +9,7 @@ final class MenuController: NSObject, NSMenuDelegate {
     private var modeItems: [NSMenuItem] = []
     private var colorItems: [NSMenuItem] = []
     private let dimSlider = NSSlider(value: 0.75, minValue: 0.2, maxValue: 0.95, target: nil, action: nil)
+    private let speedSlider = NSSlider(value: 1, minValue: 0.3, maxValue: 3, target: nil, action: nil)
     private var previewWork: DispatchWorkItem?
     private var actionItems: [NSMenuItem] = []
     private let accessibilityItem = NSMenuItem(title: "", action: #selector(openAccessibility), keyEquivalent: "")
@@ -63,6 +64,17 @@ final class MenuController: NSObject, NSMenuDelegate {
         sliderItem.view = holder
         menu.addItem(sliderItem)
 
+        menu.addItem(header("簡報筆指標速度（左慢 → 右快）"))
+        speedSlider.target = self
+        speedSlider.action = #selector(speedChanged)
+        speedSlider.isContinuous = true
+        let speedHolder = NSView(frame: NSRect(x: 0, y: 0, width: 220, height: 28))
+        speedSlider.frame = NSRect(x: 18, y: 4, width: 190, height: 20)
+        speedHolder.addSubview(speedSlider)
+        let speedItem = NSMenuItem()
+        speedItem.view = speedHolder
+        menu.addItem(speedItem)
+
         menu.addItem(.separator())
         let keysRoot = NSMenuItem(title: "簡報筆音量鍵", action: nil, keyEquivalent: "")
         let keysMenu = NSMenu()
@@ -95,6 +107,7 @@ final class MenuController: NSObject, NSMenuDelegate {
         let hex = settings.laserColor.hexRGB
         colorItems.forEach { $0.state = EffectSettings.laserPresets[$0.tag].1.hexRGB == hex ? .on : .off }
         dimSlider.doubleValue = Double(settings.spotlightDim)
+        speedSlider.doubleValue = Double(settings.pointerSpeed)
         hudItem.state = settings.showModeHUD ? .on : .off
         for item in actionItems {
             guard let pair = item.representedObject as? [String],
@@ -114,6 +127,8 @@ final class MenuController: NSObject, NSMenuDelegate {
     @objc private func openAccessibility() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
     }
+
+    @objc private func speedChanged() { settings.pointerSpeed = CGFloat(speedSlider.doubleValue) }
 
     @objc private func toggleHUD() { settings.showModeHUD.toggle() }
 

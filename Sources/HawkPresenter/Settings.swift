@@ -18,6 +18,8 @@ final class EffectSettings {
     var pointerHaloRadius: CGFloat { didSet { save(pointerHaloRadius, "pointerHaloRadius") } }
     /// Flash the new mode's name in the middle of the screen after switching.
     var showModeHUD: Bool { didSet { defaults.set(showModeHUD, forKey: "showModeHUD") } }
+    /// Multiplier for the pen's gyro motion only (Mac trackpad / mouse unaffected).
+    var pointerSpeed: CGFloat { didSet { save(pointerSpeed, "pointerSpeed") } }
 
     static let laserPresets: [(String, NSColor)] = [
         ("紅", .systemRed), ("綠", .systemGreen), ("藍", .systemBlue),
@@ -38,6 +40,7 @@ final class EffectSettings {
         zoom = load("zoom", 2)
         pointerHaloRadius = load("pointerHaloRadius", 30)
         showModeHUD = d.bool(forKey: "showModeHUD") // off unless turned on
+        pointerSpeed = load("pointerSpeed", 1)
     }
 
     private func save(_ v: CGFloat, _ key: String) { defaults.set(Double(v), forKey: key) }

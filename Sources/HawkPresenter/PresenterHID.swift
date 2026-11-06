@@ -43,6 +43,11 @@ final class PresenterHID {
     /// telling its keys apart from the Mac keyboard's. Arrives 1–13 ms before the
     /// system delivers the same key to event taps (measured 2026-11-07).
     private(set) var lastKeyReportAt: CFAbsoluteTime = 0
+    /// Called with the pen's raw gyro motion while the mouse interface is seized.
+    var onMouseDelta: ((Int, Int) -> Void)?
+    private var mouseDevice: IOHIDDevice?
+    private(set) var mouseSeized = false
+    private var wantMouseSeized = false
 
     private let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
     private var buffers: [UnsafeMutablePointer<UInt8>] = []
@@ -66,13 +71,16 @@ final class PresenterHID {
         IOHIDManagerSetDeviceMatching(manager, [
             kIOHIDVendorIDKey: Self.vendorID,
             kIOHIDProductIDKey: Self.productID,
+            kIOHIDPrimaryUsagePageKey: 0x01,
+            kIOHIDPrimaryUsageKey: 0x06,
         ] as CFDictionary)
+        startMouseThread()
 
         let ctx = Unmanaged.passUnretained(self).toOpaque()
         IOHIDManagerRegisterDeviceMatchingCallback(manager, { ctx, _, _, device in
             Unmanaged<PresenterHID>.fromOpaque(ctx!).takeUnretainedValue().attach(device)
         }, ctx)
-        IOHIDManagerRegisterDeviceRemovalCallback(manager, { ctx, _, _, _ in
+        IOHIDManagerRegisterDeviceRemovalCallback(manager, { ctx, _, _, device in
             Unmanaged<PresenterHID>.fromOpaque(ctx!).takeUnretainedValue().onEvent?(.connected(false))
         }, ctx)
         IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
@@ -90,12 +98,7 @@ final class PresenterHID {
         buffers.append(buf)
         let ctx = Unmanaged.passUnretained(self).toOpaque()
 
-        if page == 0x01 && usage == 0x02 {
-            // Pen's gyro mouse: we only use it to know whether the pen is still moving.
-            IOHIDDeviceRegisterInputReportCallback(device, buf, size, { ctx, _, _, _, _, _, _ in
-                Unmanaged<PresenterHID>.fromOpaque(ctx!).takeUnretainedValue().lastPenMouse = Date()
-            }, ctx)
-        } else if page == 0x01 && usage == 0x06 {
+        if page == 0x01 && usage == 0x06 {
             IOHIDDeviceRegisterInputReportCallback(device, buf, size, { ctx, _, _, _, reportID, report, length in
                 let me = Unmanaged<PresenterHID>.fromOpaque(ctx!).takeUnretainedValue()
                 switch reportID {
@@ -111,6 +114,82 @@ final class PresenterHID {
             }, ctx)
             onEvent?(.connected(true))
         }
+    }
+
+    /// Take the pen's mouse away from the system (it stops moving the cursor by itself).
+    /// Allowed for mouse-class devices without root; released automatically on quit.
+    func seizeMouse(_ on: Bool) {
+        onMouseThread { self.applySeize(on) }
+    }
+
+    private func applySeize(_ on: Bool) {
+        wantMouseSeized = on
+        guard let d = mouseDevice, on != mouseSeized else { return }
+        if on {
+            let r = IOHIDDeviceOpen(d, IOOptionBits(kIOHIDOptionsTypeSeizeDevice))
+            mouseSeized = r == kIOReturnSuccess
+            hawkLog("seize pen mouse: \(String(format: "0x%08x", r))")
+        } else {
+            IOHIDDeviceClose(d, IOOptionBits(kIOHIDOptionsTypeSeizeDevice))
+            mouseSeized = false
+        }
+    }
+
+    // MARK: Gyro mouse on its own thread
+    //
+    // The pen's motion is handled off the main thread so drawing the overlay
+    // (spotlight, magnifier) never delays the cursor.
+
+    private var mouseRunLoop: CFRunLoop?
+    private let mouseManager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
+    private var mouseBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 64)
+
+    private func startMouseThread() {
+        let ready = DispatchSemaphore(value: 0)
+        let thread = Thread { [unowned self] in
+            self.mouseRunLoop = CFRunLoopGetCurrent()
+            IOHIDManagerSetDeviceMatching(self.mouseManager, [
+                kIOHIDVendorIDKey: Self.vendorID, kIOHIDProductIDKey: Self.productID,
+                kIOHIDPrimaryUsagePageKey: 0x01, kIOHIDPrimaryUsageKey: 0x02,
+            ] as CFDictionary)
+            let ctx = Unmanaged.passUnretained(self).toOpaque()
+            IOHIDManagerRegisterDeviceMatchingCallback(self.mouseManager, { ctx, _, _, device in
+                Unmanaged<PresenterHID>.fromOpaque(ctx!).takeUnretainedValue().attachMouse(device)
+            }, ctx)
+            IOHIDManagerRegisterDeviceRemovalCallback(self.mouseManager, { ctx, _, _, _ in
+                let me = Unmanaged<PresenterHID>.fromOpaque(ctx!).takeUnretainedValue()
+                me.mouseDevice = nil; me.mouseSeized = false
+            }, ctx)
+            IOHIDManagerScheduleWithRunLoop(self.mouseManager, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
+            IOHIDManagerOpen(self.mouseManager, IOOptionBits(kIOHIDOptionsTypeNone))
+            ready.signal()
+            CFRunLoopRun()
+        }
+        thread.name = "hawk.mouse"
+        thread.qualityOfService = .userInteractive
+        thread.start()
+        ready.wait()
+    }
+
+    private func onMouseThread(_ block: @escaping () -> Void) {
+        guard let rl = mouseRunLoop else { return }
+        CFRunLoopPerformBlock(rl, CFRunLoopMode.defaultMode.rawValue, block)
+        CFRunLoopWakeUp(rl)
+    }
+
+    /// Report: buttons, dx (int8), dy (int8), wheel. Always used to know whether the
+    /// pen is still moving; when seized we also move the cursor ourselves (pointer speed).
+    private func attachMouse(_ device: IOHIDDevice) {
+        mouseDevice = device
+        let ctx = Unmanaged.passUnretained(self).toOpaque()
+        IOHIDDeviceRegisterInputReportCallback(device, mouseBuffer, 64, { ctx, _, _, _, _, report, length in
+            let me = Unmanaged<PresenterHID>.fromOpaque(ctx!).takeUnretainedValue()
+            me.lastPenMouse = Date()
+            if me.mouseSeized, length >= 3 {
+                me.onMouseDelta?(Int(Int8(bitPattern: report[1])), Int(Int8(bitPattern: report[2])))
+            }
+        }, ctx)
+        if wantMouseSeized { applySeize(true) } // re-plugged dongle
     }
 
     private func handle(bits raw: UInt8) {
