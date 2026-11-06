@@ -118,14 +118,7 @@ private final class PieView: NSView {
         NSBezierPath(ovalIn: NSRect(x: k.x - 7, y: k.y - 7, width: 14, height: 14)).fill()
     }
 
-    static func symbol(_ mode: EffectMode) -> String {
-        switch mode {
-        case .laser: return "smallcircle.filled.circle"
-        case .spotlight: return "flashlight.on.fill"
-        case .magnifier: return "plus.magnifyingglass"
-        case .pointer: return "cursorarrow"
-        }
-    }
+    static func symbol(_ mode: EffectMode) -> String { mode.symbol }
 }
 
 private extension NSImage {

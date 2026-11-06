@@ -1,25 +1,29 @@
 import AppKit
+import Combine
 
-/// Shared, adjustable look of every effect. Every change is saved to UserDefaults.
-final class EffectSettings {
+/// Shared, adjustable look of every effect. Every change is saved to UserDefaults
+/// and published, so the overlay and the SwiftUI panels stay in sync.
+final class EffectSettings: ObservableObject {
     private let defaults = UserDefaults.standard
 
-    var mode: EffectMode { didSet { defaults.set(mode.rawValue, forKey: "mode") } }
+    @Published var mode: EffectMode { didSet { defaults.set(mode.rawValue, forKey: "mode") } }
     /// Temporary, unsaved override used by previews (e.g. while dragging a slider).
     var previewMode: EffectMode?
     var activeMode: EffectMode { previewMode ?? mode }
-    var laserColor: NSColor { didSet { defaults.set(laserColor.hexRGB, forKey: "laserColor") } }
-    var laserRadius: CGFloat { didSet { save(laserRadius, "laserRadius") } }
-    var spotlightRadius: CGFloat { didSet { save(spotlightRadius, "spotlightRadius") } }
+    @Published var laserColor: NSColor { didSet { defaults.set(laserColor.hexRGB, forKey: "laserColor") } }
+    @Published var laserRadius: CGFloat { didSet { save(laserRadius, "laserRadius") } }
+    @Published var spotlightRadius: CGFloat { didSet { save(spotlightRadius, "spotlightRadius") } }
     /// 0 = no dimming, 1 = black.
-    var spotlightDim: CGFloat { didSet { save(spotlightDim, "spotlightDim") } }
-    var lensRadius: CGFloat { didSet { save(lensRadius, "lensRadius") } }
-    var zoom: CGFloat { didSet { save(zoom, "zoom") } }
-    var pointerHaloRadius: CGFloat { didSet { save(pointerHaloRadius, "pointerHaloRadius") } }
+    @Published var spotlightDim: CGFloat { didSet { save(spotlightDim, "spotlightDim") } }
+    @Published var lensRadius: CGFloat { didSet { save(lensRadius, "lensRadius") } }
+    @Published var zoom: CGFloat { didSet { save(zoom, "zoom") } }
+    @Published var pointerHaloRadius: CGFloat { didSet { save(pointerHaloRadius, "pointerHaloRadius") } }
     /// Flash the new mode's name in the middle of the screen after switching.
-    var showModeHUD: Bool { didSet { defaults.set(showModeHUD, forKey: "showModeHUD") } }
+    @Published var showModeHUD: Bool { didSet { defaults.set(showModeHUD, forKey: "showModeHUD") } }
     /// Multiplier for the pen's gyro motion only (Mac trackpad / mouse unaffected).
-    var pointerSpeed: CGFloat { didSet { save(pointerSpeed, "pointerSpeed") } }
+    @Published var pointerSpeed: CGFloat { didSet { save(pointerSpeed, "pointerSpeed") } }
+
+    var isPresetColor: Bool { Self.laserPresets.contains { $0.1.hexRGB == laserColor.hexRGB } }
 
     static let laserPresets: [(String, NSColor)] = [
         ("紅", .systemRed), ("綠", .systemGreen), ("藍", .systemBlue),
@@ -50,6 +54,7 @@ final class EffectSettings {
     }
 
     func setAction(_ action: PenAction, for slot: KeySlot) {
+        objectWillChange.send()
         defaults.set(action.rawValue, forKey: "slot." + slot.rawValue)
     }
 

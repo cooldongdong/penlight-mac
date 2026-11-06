@@ -5,7 +5,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hid = PresenterHID()
     private var overlay: OverlayController!
     private lazy var hud = ModeHUD()
-    private var menu: MenuController!
+    private let state = AppState()
+    private var status: StatusController!
+    private lazy var onboarding = OnboardingWindowController(state: state)
     private let router = KeyRouter()
     private let volumeKeys = VolumeKeys()
     private lazy var pie: PieMenu = {
@@ -16,12 +18,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         overlay = OverlayController()
-        menu = MenuController(overlay: overlay)
-
-        // Reading the dongle's keyboard interface needs Input Monitoring.
-        if IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) != kIOHIDAccessTypeGranted {
-            IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
-        }
+        status = StatusController(settings: overlay.settings, state: state, overlay: overlay)
+        // Permissions are asked for by the onboarding window, not by surprise prompts.
+        if !state.allGranted { onboarding.show() }
 
         hid.onEvent = { [weak self] event in
             guard let self else { return }
@@ -35,7 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .gestureBegan: self.pie.begin()
             case .gestureEnded: self.pie.end()
             case .consumer(let usage): self.volumeKeys.consumer(usage)
-            case .connected(let ok): self.menu.statusLine.title = ok ? "簡報筆：已連線" : "簡報筆：未連線"
+            case .connected(let ok): self.state.penConnected = ok
             }
         }
         hid.start()
@@ -53,6 +52,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let i = args.firstIndex(of: "--demo"), i + 1 < args.count,
            let mode = EffectMode.allCases.first(where: { "\($0)" == args[i + 1] }) {
             overlay.preview(mode: mode, for: 8)
+        }
+        // `--settings <0-3>` opens the Settings window on a tab, for screenshots.
+        if let i = args.firstIndex(of: "--settings"), i + 1 < args.count,
+           let n = Int(args[i + 1]), let tab = SettingsWindowController.Tab(rawValue: n) {
+            status.openSettings(tab)
         }
     }
 

@@ -27,10 +27,8 @@ final class KeyRouter {
 
     static var isTrusted: Bool { AXIsProcessTrusted() }
 
+    /// Installs as soon as Accessibility is granted (asking is the onboarding's job).
     func start() {
-        if !Self.isTrusted {
-            AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary)
-        }
         installWhenTrusted()
     }
 

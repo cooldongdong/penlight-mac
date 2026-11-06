@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 
 enum EffectMode: Int, CaseIterable {
     case laser, spotlight, magnifier, pointer
@@ -9,6 +10,16 @@ enum EffectMode: Int, CaseIterable {
         case .spotlight: return "聚光燈"
         case .magnifier: return "放大鏡"
         case .pointer: return "滑鼠"
+        }
+    }
+
+    /// SF Symbol shared by the pie menu and the menu-bar panel.
+    var symbol: String {
+        switch self {
+        case .laser: return "smallcircle.filled.circle"
+        case .spotlight: return "flashlight.on.fill"
+        case .magnifier: return "plus.magnifyingglass"
+        case .pointer: return "cursorarrow"
         }
     }
 
@@ -126,8 +137,14 @@ final class OverlayController {
     private let streamer = ScreenStreamer()
     private var stopStreamWork: DispatchWorkItem?
 
+    private var settingsChange: AnyCancellable?
+
     init() {
         rebuild()
+        // Any setting changed (panel, pen, settings window) → redraw on the next turn.
+        settingsChange = settings.objectWillChange.sink { [weak self] in
+            DispatchQueue.main.async { self?.redraw(); self?.windows.forEach { $0.view.updateLens() } }
+        }
         streamer.onFrame = { [weak self] surface in
             guard let self else { return }
             for w in self.windows where w.screen.displayID == self.streamer.displayID {
