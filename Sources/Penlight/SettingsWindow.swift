@@ -81,21 +81,7 @@ private struct GeneralTab: View {
 
 private struct KeysTab: View {
     @ObservedObject var settings: EffectSettings
-
-    var body: some View {
-        Form {
-            Section {
-                ForEach(KeySlot.volumeSlots, id: \.self) { slot in
-                    ActionPicker(settings: settings, slot: slot)
-                }
-            } header: {
-                Text("音量鍵")
-            } footer: {
-                Text("按住模式鍵時，音量鍵固定用來切換模式。").font(.caption).foregroundStyle(.secondary)
-            }
-        }
-        .formStyle(.grouped)
-    }
+    var body: some View { DeviceKeysView(settings: settings) }
 }
 
 /// The pie drawn in the middle, each direction's picker placed on its side.

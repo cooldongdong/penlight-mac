@@ -14,6 +14,8 @@ final class KeyRouter {
     var passVolumeToSystem: (_ up: Bool) -> Bool = { _ in true }
     var lastPenKeyReport: () -> CFAbsoluteTime = { 0 }
     var googleSlidesEnabled = true
+    /// Current action of a slot (Settings → 按鍵).
+    var actionFor: (KeySlot) -> PenAction = { $0.defaultAction }
     /// Fired once the tap is installed, i.e. Accessibility has been granted.
     var onInstalled: (() -> Void)?
 
@@ -73,15 +75,35 @@ final class KeyRouter {
         if type == .keyUp, swallowedKeyUps.remove(code) != nil { return nil }
         guard type == .keyDown else { return pass }
 
+        if code == 35, CFAbsoluteTimeGetCurrent() < swallowCmdOptPUntil {
+            swallowedKeyUps.insert(35)
+            return nil
+        }
+
+        // Which pen gesture produced this key, if it's one we let users remap.
+        // Long-press page-up sends Shift+F5 then ⌘⌥P to start, Esc to stop (the
+        // dongle remembers which); long-press page-down sends B.
+        let slot: KeySlot? = {
+            switch code {
+            case 116: return .pageUpShort                                      // Page Up
+            case 121: return .pageDownShort                                    // Page Down
+            case 96 where event.flags.contains(.maskShift), 53: return .pageUpLong  // Shift+F5 / Esc
+            case 11: return .pageDownLong                                      // B
+            default: return nil
+            }
+        }()
+        if let slot, actionFor(slot) != .systemVolume {
+            swallowedKeyUps.insert(code)
+            if code == 96 { swallowCmdOptPUntil = CFAbsoluteTimeGetCurrent() + 0.3 }
+            ActionRunner.perform(actionFor(slot))
+            return nil
+        }
+
         // Long-press page-up = "start slideshow": Shift+F5 (PowerPoint) then ⌘⌥P (Keynote).
         if code == 96, event.flags.contains(.maskShift), googleSlidesEnabled, Self.frontIsGoogleSlides() {
             swallowedKeyUps.insert(96)
             swallowCmdOptPUntil = CFAbsoluteTimeGetCurrent() + 0.3
             ActionRunner.press(keyCode: 36, flags: .maskCommand) // ⌘Return = Present
-            return nil
-        }
-        if code == 35, CFAbsoluteTimeGetCurrent() < swallowCmdOptPUntil {
-            swallowedKeyUps.insert(35)
             return nil
         }
         return pass

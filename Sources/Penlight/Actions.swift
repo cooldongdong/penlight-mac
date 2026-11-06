@@ -31,8 +31,15 @@ struct KeyCombo: Codable, Hashable {
 
 /// Things a pen key or a pie slice can do. One catalogue shared by every slot.
 enum PenAction: Codable, Hashable {
-    case systemVolume   // volume keys only: leave the key alone, macOS changes the volume
+    /// Leave the key alone: whatever the pen normally does (page, volume, slideshow…).
+    /// Named systemVolume for compatibility with stored settings.
+    case systemVolume
     case nothing
+    case pageUp, pageDown
+    case nextMode, previousMode
+    /// Bigger / smaller for the current effect; continuous while held when assigned
+    /// to "hold mode key + page up/down".
+    case grow, shrink
     case click
     case missionControl
     case blackScreen
@@ -40,17 +47,24 @@ enum PenAction: Codable, Hashable {
     case shortcut(KeyCombo?)
 
     /// Choices offered in pickers (the shortcut entry stands for "record one").
-    static func choices(includeVolume: Bool) -> [PenAction] {
-        (includeVolume ? [.systemVolume] : [])
-            + [.nothing, .click, .missionControl, .blackScreen]
+    static func choices(for slot: KeySlot) -> [PenAction] {
+        (slot.hasOriginal ? [.systemVolume] : [])
+            + [.nothing, .click, .missionControl, .blackScreen, .pageUp, .pageDown]
+            + [.nextMode, .previousMode, .grow, .shrink]
             + EffectMode.allCases.map { .mode($0) }
             + [.shortcut(nil)]
     }
 
     var title: String {
         switch self {
-        case .systemVolume: return "調整音量（系統預設）"
+        case .systemVolume: return "原本的功能"
         case .nothing: return "不做事"
+        case .pageUp: return "上一頁"
+        case .pageDown: return "下一頁"
+        case .nextMode: return "下一個模式"
+        case .previousMode: return "上一個模式"
+        case .grow: return "效果放大"
+        case .shrink: return "效果縮小"
         case .click: return "滑鼠點擊"
         case .missionControl: return "指揮中心"
         case .blackScreen: return "黑屏"
@@ -71,8 +85,14 @@ enum PenAction: Codable, Hashable {
 
     var symbol: String {
         switch self {
-        case .systemVolume: return "speaker.wave.2"
+        case .systemVolume: return "arrow.uturn.backward"
         case .nothing: return "circle.slash"
+        case .pageUp: return "chevron.up"
+        case .pageDown: return "chevron.down"
+        case .nextMode: return "arrow.right.circle"
+        case .previousMode: return "arrow.left.circle"
+        case .grow: return "plus.circle"
+        case .shrink: return "minus.circle"
         case .click: return "cursorarrow.click"
         case .missionControl: return "rectangle.3.group"
         case .blackScreen: return "rectangle.fill"
@@ -106,8 +126,10 @@ enum PenAction: Codable, Hashable {
 let syntheticEventTag: Int64 = 0x4841574B // "HAWK"
 
 enum ActionRunner {
-    /// Set by the app: how to switch the effect mode.
+    /// Set by the app: how to switch the effect mode, cycle it, and resize it.
     static var switchMode: ((EffectMode) -> Void)?
+    static var cycleMode: ((_ forward: Bool) -> Void)?
+    static var resize: ((_ bigger: Bool) -> Void)?
 
     static func perform(_ action: PenAction, volumeUp: Bool = true) {
         switch action {
@@ -115,6 +137,12 @@ enum ActionRunner {
         case .systemVolume: postVolumeKey(up: volumeUp)
         case .click: click()
         case .blackScreen: press(keyCode: CGKeyCode(kVK_ANSI_B), flags: [])
+        case .pageUp: press(keyCode: CGKeyCode(kVK_PageUp), flags: [])
+        case .pageDown: press(keyCode: CGKeyCode(kVK_PageDown), flags: [])
+        case .nextMode: cycleMode?(true)
+        case .previousMode: cycleMode?(false)
+        case .grow: resize?(true)
+        case .shrink: resize?(false)
         case .mode(let m): switchMode?(m)
         case .shortcut(let combo):
             if let combo { press(keyCode: CGKeyCode(combo.keyCode), flags: combo.cgFlags) }
@@ -158,10 +186,17 @@ enum ActionRunner {
     }
 }
 
-/// Every assignable place: four volume-key presses and four pie slices.
+/// Every assignable place on the pen, plus the four pie slices.
 enum KeySlot: String, CaseIterable {
+    case pageUpShort, pageUpLong, pageDownShort, pageDownLong
     case volumeUpShort, volumeUpLong, volumeDownShort, volumeDownLong
+    case modeDoubleTap, modeHoldVolumeUp, modeHoldVolumeDown, modeHoldPageUp, modeHoldPageDown
     case pieUp, pieRight, pieDown, pieLeft
+
+    /// Slots where "原本的功能" (let the key through) makes sense.
+    var hasOriginal: Bool {
+        [.pageUpShort, .pageUpLong, .pageDownShort, .pageDownLong].contains(self) || isVolume
+    }
 
     static let volumeSlots: [KeySlot] = [.volumeUpShort, .volumeUpLong, .volumeDownShort, .volumeDownLong]
     static let pieSlots: [KeySlot] = [.pieUp, .pieRight, .pieDown, .pieLeft]
@@ -173,6 +208,13 @@ enum KeySlot: String, CaseIterable {
         case .volumeUpLong: return "音量 + 長按"
         case .volumeDownShort: return "音量 − 短按"
         case .volumeDownLong: return "音量 − 長按"
+        case .pageUpShort, .pageDownShort: return "短按"
+        case .pageUpLong, .pageDownLong: return "長按"
+        case .modeDoubleTap: return "連按兩下"
+        case .modeHoldVolumeUp: return "按住 ＋ 音量 ＋"
+        case .modeHoldVolumeDown: return "按住 ＋ 音量 −"
+        case .modeHoldPageUp: return "按住 ＋ 上一頁"
+        case .modeHoldPageDown: return "按住 ＋ 下一頁"
         case .pieUp: return "上"
         case .pieRight: return "右"
         case .pieDown: return "下"
@@ -185,6 +227,11 @@ enum KeySlot: String, CaseIterable {
         case .volumeUpShort: return .click
         case .volumeDownShort: return .missionControl
         case .volumeUpLong, .volumeDownLong: return .nothing
+        case .pageUpShort, .pageUpLong, .pageDownShort, .pageDownLong: return .systemVolume
+        case .modeDoubleTap, .modeHoldVolumeUp: return .nextMode
+        case .modeHoldVolumeDown: return .previousMode
+        case .modeHoldPageUp: return .grow
+        case .modeHoldPageDown: return .shrink
         case .pieUp: return .mode(.laser)
         case .pieRight: return .mode(.spotlight)
         case .pieDown: return .mode(.magnifier)
@@ -234,6 +281,44 @@ final class VolumeKeys {
             longTimer?.cancel(); longTimer = nil
             if !longFired { ActionRunner.perform(action(KeySlot.slots(up: up).short), volumeUp: up) }
         default: break
+        }
+    }
+}
+
+/// The physical buttons, for the device diagram in Settings.
+enum PenButton: CaseIterable {
+    case mode, pageUp, pageDown, laser, volumeUp, volumeDown
+
+    var title: String {
+        switch self {
+        case .mode: return "模式鍵"
+        case .pageUp: return "上一頁"
+        case .pageDown: return "下一頁"
+        case .laser: return "雷射鍵"
+        case .volumeUp: return "音量 ＋"
+        case .volumeDown: return "音量 −"
+        }
+    }
+
+    var slots: [KeySlot] {
+        switch self {
+        case .mode: return [.modeDoubleTap, .modeHoldVolumeUp, .modeHoldVolumeDown, .modeHoldPageUp, .modeHoldPageDown]
+        case .pageUp: return [.pageUpShort, .pageUpLong]
+        case .pageDown: return [.pageDownShort, .pageDownLong]
+        case .laser: return []
+        case .volumeUp: return [.volumeUpShort, .volumeUpLong]
+        case .volumeDown: return [.volumeDownShort, .volumeDownLong]
+        }
+    }
+
+    /// What can't be changed, said once under the slots.
+    var note: String? {
+        switch self {
+        case .mode: return "按住顯示效果、連按兩下並按住開啟圓形選單，這兩個固定不變。"
+        case .pageUp: return "原本的長按：開始／結束放映。"
+        case .pageDown: return "原本的長按：黑屏。"
+        case .laser: return "雷射鍵只發出實體綠光，不會傳訊號給電腦，所以無法自訂。"
+        case .volumeUp, .volumeDown: return nil
         }
     }
 }

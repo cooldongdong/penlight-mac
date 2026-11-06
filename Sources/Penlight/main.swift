@@ -28,10 +28,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             switch event {
             case .holdBegan: self.overlay.show()
             case .holdEnded: self.stopAdjusting(); self.overlay.hide()
-            case .adjustBegan(let bigger): self.startAdjusting(bigger: bigger)
+            case .adjustBegan(let bigger):
+                // Grow/shrink keep their continuous behaviour; anything else fires once.
+                let action = self.action(bigger ? .modeHoldPageUp : .modeHoldPageDown)
+                switch action {
+                case .grow: self.startAdjusting(bigger: true)
+                case .shrink: self.startAdjusting(bigger: false)
+                default: ActionRunner.perform(action)
+                }
             case .adjustEnded: self.stopAdjusting()
-            case .volumeUpWhileHeld, .doubleTap: self.switchMode(to: self.overlay.settings.mode.next)
-            case .volumeDownWhileHeld: self.switchMode(to: self.overlay.settings.mode.previous)
+            case .doubleTap: ActionRunner.perform(self.action(.modeDoubleTap))
+            case .volumeUpWhileHeld: ActionRunner.perform(self.action(.modeHoldVolumeUp))
+            case .volumeDownWhileHeld: ActionRunner.perform(self.action(.modeHoldVolumeDown))
             case .gestureBegan: self.pie.begin()
             case .gestureEnded: self.pie.end()
             case .consumer(let usage): self.volumeKeys.consumer(usage)
@@ -41,6 +49,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hid.start()
 
         ActionRunner.switchMode = { [weak self] mode in self?.switchMode(to: mode) }
+        ActionRunner.cycleMode = { [weak self] forward in
+            guard let self else { return }
+            let m = self.overlay.settings.mode
+            self.switchMode(to: forward ? m.next : m.previous)
+        }
+        ActionRunner.resize = { [weak self] bigger in
+            self?.overlay.settings.adjust(bigger: bigger)
+            self?.overlay.redraw()
+        }
+        router.actionFor = { [weak self] slot in self?.action(slot) ?? slot.defaultAction }
         volumeKeys.action = { [weak self] slot in self?.overlay.settings.action(for: slot) ?? slot.defaultAction }
         router.passVolumeToSystem = { [weak self] up in self?.volumeKeys.systemHandles(up: up) ?? true }
         router.lastPenKeyReport = { [weak self] in self?.hid.lastKeyReportAt ?? 0 }
@@ -99,6 +117,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         return clamped.min { hypot($0.x - p.x, $0.y - p.y) < hypot($1.x - p.x, $1.y - p.y) } ?? p
     }
+
+    private func action(_ slot: KeySlot) -> PenAction { overlay.settings.action(for: slot) }
 
     private func switchMode(to mode: EffectMode) {
         overlay.settings.mode = mode

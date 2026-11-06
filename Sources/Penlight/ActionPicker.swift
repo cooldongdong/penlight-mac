@@ -8,11 +8,25 @@ struct ActionPicker: View {
     var showsLabel = true
     /// Pie tab: fixed-width picker with the recorder underneath, so nothing moves sideways.
     var compactWidth: CGFloat? = nil
+    /// Keys tab: fixed picker width with a fixed slot for the recorder on its right.
+    var inline: (picker: CGFloat, recorder: CGFloat)? = nil
 
     private var current: PenAction { settings.action(for: slot) }
 
     var body: some View {
-        if let w = compactWidth {
+        if let inline {
+            HStack(spacing: 8) {
+                picker.frame(width: inline.picker)
+                Group {
+                    if case .shortcut(let combo) = current {
+                        ShortcutRecorder(combo: combo) { settings.setAction(.shortcut($0), for: slot) }
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(width: inline.recorder, height: 22)
+            }
+        } else if let w = compactWidth {
             VStack(spacing: 6) {
                 picker.frame(width: w)
                 // Always reserve the recorder's row so choosing "shortcut" doesn't shift anything.
@@ -44,7 +58,7 @@ struct ActionPicker: View {
                     settings.setAction(choice, for: slot)
                 }
             )) {
-                ForEach(PenAction.choices(includeVolume: slot.isVolume), id: \.self) { action in
+                ForEach(PenAction.choices(for: slot), id: \.self) { action in
                     Label(action.title, systemImage: action.symbol).tag(action)
                 }
             }
