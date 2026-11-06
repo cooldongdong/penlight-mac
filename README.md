@@ -60,3 +60,7 @@
   - 一般按鍵帶 keyboard type `40`（Mac 內建鍵盤是 `106`）。
   - 音量鍵沒有 keyboard type，但接收器的 HID report 比系統事件早 1～13 毫秒到，所以「60 毫秒內簡報筆送過按鍵」就算是簡報筆的。
 - 尚未解出：vendor output report `3`（7 bytes），原廠用來讓接收器震動／發聲提醒計時。
+
+## 授權
+
+[MIT](LICENSE)
