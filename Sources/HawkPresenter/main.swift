@@ -4,6 +4,7 @@ import IOKit.hid
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hid = PresenterHID()
     private var overlay: OverlayController!
+    private lazy var hud = ModeHUD()
     private var statusItem: NSStatusItem!
     private let statusLine = NSMenuItem(title: "簡報筆：尋找中…", action: nil, keyEquivalent: "")
 
@@ -21,9 +22,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             switch event {
             case .holdBegan: self.overlay.show()
             case .holdEnded: self.overlay.hide()
-            case .pageUpWhileHeld: self.overlay.radius = min(self.overlay.radius + 4, 60)
-            case .pageDownWhileHeld: self.overlay.radius = max(self.overlay.radius - 4, 6)
-            case .doubleTap: break // mode cycling comes in the next version
+            case .pageUpWhileHeld: self.overlay.settings.adjust(bigger: true); self.overlay.redraw()
+            case .pageDownWhileHeld: self.overlay.settings.adjust(bigger: false); self.overlay.redraw()
+            case .doubleTap:
+                self.overlay.settings.mode = self.overlay.settings.mode.next
+                self.overlay.redraw()
+                self.hud.flash(self.overlay.settings.mode.title)
             case .connected(let ok): self.statusLine.title = ok ? "簡報筆：已連線" : "簡報筆：未連線"
             }
         }
