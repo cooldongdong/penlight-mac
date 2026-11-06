@@ -48,11 +48,33 @@ enum PenAction: Codable, Hashable {
 
     /// Choices offered in pickers (the shortcut entry stands for "record one").
     static func choices(for slot: KeySlot) -> [PenAction] {
-        (slot.hasOriginal ? [.systemVolume] : [])
-            + [.nothing, .click, .missionControl, .blackScreen, .pageUp, .pageDown]
+        let all: [PenAction] = [.nothing, .click, .missionControl, .blackScreen, .pageUp, .pageDown]
             + [.nextMode, .previousMode, .grow, .shrink]
             + EffectMode.allCases.map { .mode($0) }
             + [.shortcut(nil)]
+        guard let native = slot.nativeTitle else { return all }
+        // The key's own function goes first, under its real name; don't list it twice.
+        return [.systemVolume] + all.filter { $0.title != native }
+    }
+
+    /// Symbol as shown for a given slot (the key's own function gets its own icon).
+    func symbol(for slot: KeySlot) -> String {
+        guard case .systemVolume = self else { return symbol }
+        switch slot {
+        case .pageUpShort: return "chevron.up"
+        case .pageDownShort: return "chevron.down"
+        case .pageUpLong: return "play.rectangle"
+        case .pageDownLong: return "rectangle.fill"
+        case .volumeUpShort, .volumeUpLong: return "speaker.wave.3"
+        case .volumeDownShort, .volumeDownLong: return "speaker.wave.1"
+        default: return symbol
+        }
+    }
+
+    /// Title as shown for a given slot: "keep the key's own function" reads as that function.
+    func title(for slot: KeySlot) -> String {
+        if case .systemVolume = self, let native = slot.nativeTitle { return native }
+        return title
     }
 
     var title: String {
@@ -193,9 +215,17 @@ enum KeySlot: String, CaseIterable {
     case modeTap, modeDoubleTap, modeHoldVolumeUp, modeHoldVolumeDown, modeHoldPageUp, modeHoldPageDown
     case pieUp, pieRight, pieDown, pieLeft
 
-    /// Slots where "原本的功能" (let the key through) makes sense.
-    var hasOriginal: Bool {
-        [.pageUpShort, .pageUpLong, .pageDownShort, .pageDownLong].contains(self) || isVolume
+    /// What the pen does by itself in this slot, by name; nil when there's nothing to keep.
+    var nativeTitle: String? {
+        switch self {
+        case .pageUpShort: return "上一頁"
+        case .pageDownShort: return "下一頁"
+        case .pageUpLong: return "開始／結束放映"
+        case .pageDownLong: return "黑屏"
+        case .volumeUpShort, .volumeUpLong: return "調高音量"
+        case .volumeDownShort, .volumeDownLong: return "調低音量"
+        default: return nil
+        }
     }
 
     static let volumeSlots: [KeySlot] = [.volumeUpShort, .volumeUpLong, .volumeDownShort, .volumeDownLong]
@@ -204,10 +234,8 @@ enum KeySlot: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .volumeUpShort: return "音量 + 短按"
-        case .volumeUpLong: return "音量 + 長按"
-        case .volumeDownShort: return "音量 − 短按"
-        case .volumeDownLong: return "音量 − 長按"
+        case .volumeUpShort, .volumeDownShort: return "短按"
+        case .volumeUpLong, .volumeDownLong: return "長按"
         case .pageUpShort, .pageDownShort: return "短按"
         case .pageUpLong, .pageDownLong: return "長按"
         case .modeTap: return "輕按"
@@ -317,8 +345,7 @@ enum PenButton: CaseIterable {
     var note: String? {
         switch self {
         case .mode: return "輕按：半秒內放開、不移動筆（一碰就放開收不到）。按住與圓形選單固定不變。"
-        case .pageUp: return "原本的長按：開始／結束放映。"
-        case .pageDown: return "原本的長按：黑屏。"
+        case .pageUp, .pageDown: return nil
         case .laser: return "雷射鍵只發出實體綠光，不會傳訊號給電腦，所以無法自訂。"
         case .volumeUp, .volumeDown: return nil
         }

@@ -19,6 +19,8 @@ final class KeyRouter {
     /// Fired once the tap is installed, i.e. Accessibility has been granted.
     var onInstalled: (() -> Void)?
 
+    /// Log every pen key (Penlight.log) while diagnosing.
+    var debugKeys = true
     private var tap: CFMachPort?
     private var retry: Timer?
     private let penKeyboardType: Int64 = 40
@@ -74,6 +76,9 @@ final class KeyRouter {
 
         if type == .keyUp, swallowedKeyUps.remove(code) != nil { return nil }
         guard type == .keyDown else { return pass }
+        if debugKeys {
+            penlightLog("pen key down code=\(code) flags=\(String(event.flags.rawValue, radix: 16)) front=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "-")")
+        }
 
         if code == 35, CFAbsoluteTimeGetCurrent() < swallowCmdOptPUntil {
             swallowedKeyUps.insert(35)
