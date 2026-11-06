@@ -54,7 +54,7 @@ final class KeyRouter {
         CFRunLoopAddSource(CFRunLoopGetMain(), CFMachPortCreateRunLoopSource(nil, port, 0), .commonModes)
         CGEvent.tapEnable(tap: port, enable: true)
         tap = port
-        hawkLog("key router installed")
+        penlightLog("key router installed")
         onInstalled?()
         return true
     }

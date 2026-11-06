@@ -86,7 +86,7 @@ final class PresenterHID {
         IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         let r = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         if r != kIOReturnSuccess {
-            NSLog("HawkPresenter: IOHIDManagerOpen failed 0x%08x (Input Monitoring permission?)", r)
+            NSLog("Penlight: IOHIDManagerOpen failed 0x%08x (Input Monitoring permission?)", r)
         }
     }
 
@@ -128,7 +128,7 @@ final class PresenterHID {
         if on {
             let r = IOHIDDeviceOpen(d, IOOptionBits(kIOHIDOptionsTypeSeizeDevice))
             mouseSeized = r == kIOReturnSuccess
-            hawkLog("seize pen mouse: \(String(format: "0x%08x", r))")
+            penlightLog("seize pen mouse: \(String(format: "0x%08x", r))")
         } else {
             IOHIDDeviceClose(d, IOOptionBits(kIOHIDOptionsTypeSeizeDevice))
             mouseSeized = false
@@ -165,7 +165,7 @@ final class PresenterHID {
             ready.signal()
             CFRunLoopRun()
         }
-        thread.name = "hawk.mouse"
+        thread.name = "penlight.mouse"
         thread.qualityOfService = .userInteractive
         thread.start()
         ready.wait()

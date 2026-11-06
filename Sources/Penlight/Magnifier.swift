@@ -8,7 +8,7 @@ final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate {
     var onFrame: ((IOSurface) -> Void)?
     private var stream: SCStream?
     private(set) var displayID: CGDirectDisplayID?
-    private let queue = DispatchQueue(label: "hawk.capture")
+    private let queue = DispatchQueue(label: "penlight.capture")
 
     /// Starts (or restarts) streaming the given display. Safe to call repeatedly.
     func start(displayID id: CGDirectDisplayID) {
@@ -17,7 +17,7 @@ final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate {
         displayID = id
         SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: true) { [weak self] content, error in
             guard let self, let content else {
-                NSLog("HawkPresenter: screen capture unavailable: %@", String(describing: error))
+                NSLog("Penlight: screen capture unavailable: %@", String(describing: error))
                 return
             }
             guard let display = content.displays.first(where: { $0.displayID == id }) else { return }
@@ -36,10 +36,10 @@ final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate {
             do {
                 try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: self.queue)
             } catch {
-                NSLog("HawkPresenter: addStreamOutput failed: %@", String(describing: error)); return
+                NSLog("Penlight: addStreamOutput failed: %@", String(describing: error)); return
             }
             stream.startCapture { error in
-                if let error { NSLog("HawkPresenter: startCapture failed: %@", String(describing: error)) }
+                if let error { NSLog("Penlight: startCapture failed: %@", String(describing: error)) }
             }
             DispatchQueue.main.async { self.stream = stream }
         }
@@ -65,7 +65,7 @@ final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate {
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        NSLog("HawkPresenter: stream stopped: %@", String(describing: error))
+        NSLog("Penlight: stream stopped: %@", String(describing: error))
         DispatchQueue.main.async { if self.stream === stream { self.stream = nil; self.displayID = nil } }
     }
 }

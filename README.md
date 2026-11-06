@@ -1,12 +1,15 @@
-# Hawk Presenter（自製版）
+# Penlight
 
-Hawk DR550DL 簡報筆的 macOS 原生工具，取代原廠只有 Intel 版、未公證的 `Hawk Presenter-CNF.app`。
+給 **Hawk DR550DL 簡報筆**用的 macOS 原生工具（Apple Silicon）：數位雷射點、聚光燈、放大鏡、滑鼠模式、圓形選單切換、可自訂的按鍵。
+
+> **非官方專案**，與 Hawk（浩客）及原廠軟體無關。不含任何原廠程式或素材；接收器協定是為了互通，自行監聽實機解出來的。
+> 原廠軟體只有 Intel 版、未經 Apple 公證，在 macOS 27 之後可能無法執行，這是做這個專案的原因。
 
 ## 建置
 
 ```sh
 ./scripts/make-signing-cert.sh   # 只要跑一次：在鑰匙圈建立本機固定簽章
-./scripts/build-app.sh           # 產出 build/Hawk Presenter.app（arm64）
+./scripts/build-app.sh           # 產出 build/Penlight.app（arm64）
 ```
 
 沒有固定簽章的話，每次重新建置 macOS 都會把它當成新 app，權限會掉。
@@ -16,8 +19,8 @@ Hawk DR550DL 簡報筆的 macOS 原生工具，取代原廠只有 Intel 版、�
 - **螢幕與系統錄音**：放大鏡；讀視窗標題
 - **輔助使用**：音量鍵自訂動作、Google 簡報放映、簡報筆專用指標速度
 
-測試用：`open "build/Hawk Presenter.app" --args --demo magnifier`（不用簡報筆，直接顯示 8 秒）。
-除錯紀錄寫在 `~/Library/Logs/HawkPresenter.log`。
+測試用：`open build/Penlight.app --args --demo magnifier`（不用簡報筆，直接顯示 8 秒）。
+除錯紀錄寫在 `~/Library/Logs/Penlight.log`。
 
 ## 操作
 

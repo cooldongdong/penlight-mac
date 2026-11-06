@@ -18,7 +18,7 @@ final class MenuController: NSObject, NSMenuDelegate {
     init(overlay: OverlayController) {
         self.overlay = overlay
         super.init()
-        statusItem.button?.image = NSImage(systemSymbolName: "laser.burst", accessibilityDescription: "Hawk Presenter")
+        statusItem.button?.image = NSImage(systemSymbolName: "laser.burst", accessibilityDescription: "Penlight")
         let menu = NSMenu()
         menu.delegate = self
         menu.addItem(statusLine)

@@ -2,9 +2,9 @@
 import PackageDescription
 
 let package = Package(
-    name: "HawkPresenter",
+    name: "Penlight",
     platforms: [.macOS(.v13)],
     targets: [
-        .executableTarget(name: "HawkPresenter", path: "Sources/HawkPresenter")
+        .executableTarget(name: "Penlight", path: "Sources/Penlight")
     ]
 )

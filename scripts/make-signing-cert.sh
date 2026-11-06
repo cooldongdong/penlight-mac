@@ -5,13 +5,15 @@
 # rebuild looks like a brand-new app to macOS and loses the Input Monitoring
 # permission. Signing with a stable certificate keeps the permission across
 # rebuilds. The certificate is only used to sign this app locally; delete
-# "Hawk Presenter Local Signing" in Keychain Access to remove it.
+# "Penlight Local Signing" in Keychain Access to remove it.
 set -eu
-NAME="Hawk Presenter Local Signing"
+NAME="Penlight Local Signing"
 
-if security find-identity -p codesigning | grep -q "$NAME"; then
-  echo "Already exists: $NAME"; exit 0
-fi
+for existing in "$NAME" "Hawk Presenter Local Signing"; do  # older name still works
+  if security find-identity -p codesigning | grep -q "$existing"; then
+    echo "Already exists: $existing"; exit 0
+  fi
+done
 
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 cat > "$T/cfg" <<EOF
