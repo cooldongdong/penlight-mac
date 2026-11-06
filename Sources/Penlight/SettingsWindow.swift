@@ -52,11 +52,50 @@ struct PermissionsList: View {
 
 private struct GeneralTab: View {
     @ObservedObject var settings: EffectSettings
+
+    private func chooseImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.message = "選一張圖當雷射點（建議用去背的 PNG）"
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            settings.setLaserImage(from: url)
+        } else if settings.laserImage == nil {
+            settings.useLaserImage = false
+        }
+    }
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginError: String?
 
     var body: some View {
         Form {
+            Section("雷射點") {
+                Picker("樣式", selection: $settings.useLaserImage) {
+                    Text("圓點").tag(false)
+                    Text("自訂圖片").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: settings.useLaserImage) { on in
+                    if on && settings.laserImage == nil { chooseImage() }
+                }
+                HStack(alignment: .center) {
+                    Text("圖片")
+                    Spacer()
+                    HStack(spacing: 10) {
+                        // Fixed thumbnail slot: empty or filled, nothing moves.
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.06))
+                            if let img = settings.laserImage {
+                                Image(nsImage: img).resizable().scaledToFit().padding(3)
+                            }
+                        }
+                        .frame(width: 32, height: 32)
+                        Button("選擇圖片…", action: chooseImage)
+                    }
+                }
+                .disabled(!settings.useLaserImage)
+            }
             Section("顯示") {
                 Toggle("切換模式時顯示模式名稱", isOn: $settings.showModeHUD)
             }

@@ -19,6 +19,9 @@ final class EffectSettings: ObservableObject {
     @Published var zoom: CGFloat { didSet { save(zoom, "zoom") } }
     @Published var pointerHaloRadius: CGFloat { didSet { save(pointerHaloRadius, "pointerHaloRadius") } }
     /// Flash the new mode's name in the middle of the screen after switching.
+    /// Laser drawn as the user's own image instead of the dot.
+    @Published var useLaserImage: Bool { didSet { defaults.set(useLaserImage, forKey: "useLaserImage") } }
+    @Published private(set) var laserImage: NSImage?
     @Published var showModeHUD: Bool { didSet { defaults.set(showModeHUD, forKey: "showModeHUD") } }
     /// Multiplier for the pen's gyro motion only (Mac trackpad / mouse unaffected).
     @Published var pointerSpeed: CGFloat { didSet { save(pointerSpeed, "pointerSpeed") } }
@@ -45,9 +48,30 @@ final class EffectSettings: ObservableObject {
         pointerHaloRadius = load("pointerHaloRadius", 30)
         showModeHUD = d.bool(forKey: "showModeHUD") // off unless turned on
         pointerSpeed = load("pointerSpeed", 1)
+        useLaserImage = d.bool(forKey: "useLaserImage")
+        laserImage = NSImage(contentsOf: Self.laserImageURL)
     }
 
     private func save(_ v: CGFloat, _ key: String) { defaults.set(Double(v), forKey: key) }
+
+    /// Our own copy, so moving or deleting the original doesn't break the pointer.
+    static var laserImageURL: URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Penlight", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("pointer.png")
+    }
+
+    /// Copies the picked file as PNG and switches the laser to it. Returns false if unreadable.
+    @discardableResult
+    func setLaserImage(from url: URL) -> Bool {
+        guard let image = NSImage(contentsOf: url), let tiff = image.tiffRepresentation,
+              let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]),
+              (try? png.write(to: Self.laserImageURL)) != nil else { return false }
+        laserImage = NSImage(contentsOf: Self.laserImageURL)
+        useLaserImage = true
+        return true
+    }
 
     func action(for slot: KeySlot) -> PenAction {
         PenAction.decode(defaults.object(forKey: "slot." + slot.rawValue)) ?? slot.defaultAction

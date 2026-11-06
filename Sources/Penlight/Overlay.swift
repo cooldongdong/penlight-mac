@@ -83,6 +83,14 @@ final class EffectView: NSView {
 
     private func drawLaser() {
         guard let p = point else { return }
+        if settings.useLaserImage, let image = settings.laserImage {
+            // Centred on the cursor, fitted into a square that the page keys resize.
+            let box = settings.laserRadius * 3
+            let s = image.size, k = min(box / max(s.width, 1), box / max(s.height, 1))
+            let w = s.width * k, h = s.height * k
+            image.draw(in: NSRect(x: p.x - w / 2, y: p.y - h / 2, width: w, height: h))
+            return
+        }
         let r = settings.laserRadius, color = settings.laserColor
         let ctx = NSGraphicsContext.current!.cgContext
         let colors = [color.withAlphaComponent(0.55).cgColor, color.withAlphaComponent(0).cgColor] as CFArray

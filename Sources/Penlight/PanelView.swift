@@ -75,7 +75,17 @@ struct PanelView: View {
         VStack(alignment: .leading, spacing: 12) {
             switch settings.mode {
             case .laser:
-                row("顏色") { swatches }
+                if settings.useLaserImage, let img = settings.laserImage {
+                    row("圖片") {
+                        HStack(spacing: 8) {
+                            Image(nsImage: img).resizable().scaledToFit().frame(width: 22, height: 22)
+                            Text("自訂圖片").font(.system(size: 12)).foregroundStyle(.secondary)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                } else {
+                    row("顏色") { swatches }
+                }
                 row("大小") { slider($settings.laserRadius, 6...60, preview: .laser) }
             case .spotlight:
                 row("範圍") { slider($settings.spotlightRadius, 60...600, preview: .spotlight) }
