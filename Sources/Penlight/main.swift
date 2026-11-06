@@ -26,9 +26,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hid.onEvent = { [weak self] event in
             guard let self else { return }
             switch event {
-            case .holdBegan: self.overlay.show()
-            case .holdEnded: self.stopAdjusting(); self.overlay.hide()
+            case .holdBegan:
+                self.holdStart = (Date(), NSEvent.mouseLocation)
+                self.holdCombined = false
+                self.overlay.show()
+            case .holdEnded:
+                self.stopAdjusting()
+                self.overlay.hide()
+                self.fireTapIfQuick()
             case .adjustBegan(let bigger):
+                self.holdCombined = true
                 // Grow/shrink keep their continuous behaviour; anything else fires once.
                 let action = self.action(bigger ? .modeHoldPageUp : .modeHoldPageDown)
                 switch action {
@@ -38,8 +45,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             case .adjustEnded: self.stopAdjusting()
             case .doubleTap: ActionRunner.perform(self.action(.modeDoubleTap))
-            case .volumeUpWhileHeld: ActionRunner.perform(self.action(.modeHoldVolumeUp))
-            case .volumeDownWhileHeld: ActionRunner.perform(self.action(.modeHoldVolumeDown))
+            case .volumeUpWhileHeld: self.holdCombined = true; ActionRunner.perform(self.action(.modeHoldVolumeUp))
+            case .volumeDownWhileHeld: self.holdCombined = true; ActionRunner.perform(self.action(.modeHoldVolumeDown))
             case .gestureBegan: self.pie.begin()
             case .gestureEnded: self.pie.end()
             case .consumer(let usage): self.volumeKeys.consumer(usage)
@@ -119,6 +126,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func action(_ slot: KeySlot) -> PenAction { overlay.settings.action(for: slot) }
+
+    // MARK: Light tap on the mode key
+    //
+    // A truly short press sends nothing at all (measured 2026-11-07, unfiltered).
+    // A slightly longer one sends a brief "held", so a short hold without moving
+    // the pen and without other keys counts as a tap. The effect flashes briefly;
+    // delaying every hold instead would make the normal hold feel laggy.
+
+    private var holdStart: (time: Date, location: NSPoint)?
+    private var holdCombined = false
+    private let tapMaxDuration: TimeInterval = 0.6
+    private let tapMaxTravel: CGFloat = 12
+
+    private func fireTapIfQuick() {
+        guard let start = holdStart else { return }
+        holdStart = nil
+        let action = self.action(.modeTap)
+        guard action != .nothing, !holdCombined,
+              Date().timeIntervalSince(start.time) < tapMaxDuration else { return }
+        let end = NSEvent.mouseLocation
+        guard hypot(end.x - start.location.x, end.y - start.location.y) < tapMaxTravel else { return }
+        ActionRunner.perform(action)
+    }
 
     private func switchMode(to mode: EffectMode) {
         overlay.settings.mode = mode

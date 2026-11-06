@@ -190,7 +190,7 @@ enum ActionRunner {
 enum KeySlot: String, CaseIterable {
     case pageUpShort, pageUpLong, pageDownShort, pageDownLong
     case volumeUpShort, volumeUpLong, volumeDownShort, volumeDownLong
-    case modeDoubleTap, modeHoldVolumeUp, modeHoldVolumeDown, modeHoldPageUp, modeHoldPageDown
+    case modeTap, modeDoubleTap, modeHoldVolumeUp, modeHoldVolumeDown, modeHoldPageUp, modeHoldPageDown
     case pieUp, pieRight, pieDown, pieLeft
 
     /// Slots where "原本的功能" (let the key through) makes sense.
@@ -210,6 +210,7 @@ enum KeySlot: String, CaseIterable {
         case .volumeDownLong: return "音量 − 長按"
         case .pageUpShort, .pageDownShort: return "短按"
         case .pageUpLong, .pageDownLong: return "長按"
+        case .modeTap: return "輕按"
         case .modeDoubleTap: return "連按兩下"
         case .modeHoldVolumeUp: return "按住 ＋ 音量 ＋"
         case .modeHoldVolumeDown: return "按住 ＋ 音量 −"
@@ -228,6 +229,7 @@ enum KeySlot: String, CaseIterable {
         case .volumeDownShort: return .missionControl
         case .volumeUpLong, .volumeDownLong: return .nothing
         case .pageUpShort, .pageUpLong, .pageDownShort, .pageDownLong: return .systemVolume
+        case .modeTap: return .nothing
         case .modeDoubleTap, .modeHoldVolumeUp: return .nextMode
         case .modeHoldVolumeDown: return .previousMode
         case .modeHoldPageUp: return .grow
@@ -302,7 +304,7 @@ enum PenButton: CaseIterable {
 
     var slots: [KeySlot] {
         switch self {
-        case .mode: return [.modeDoubleTap, .modeHoldVolumeUp, .modeHoldVolumeDown, .modeHoldPageUp, .modeHoldPageDown]
+        case .mode: return [.modeTap, .modeDoubleTap, .modeHoldVolumeUp, .modeHoldVolumeDown, .modeHoldPageUp, .modeHoldPageDown]
         case .pageUp: return [.pageUpShort, .pageUpLong]
         case .pageDown: return [.pageDownShort, .pageDownLong]
         case .laser: return []
@@ -314,7 +316,7 @@ enum PenButton: CaseIterable {
     /// What can't be changed, said once under the slots.
     var note: String? {
         switch self {
-        case .mode: return "按住顯示效果、連按兩下並按住開啟圓形選單，這兩個固定不變。"
+        case .mode: return "輕按：半秒內放開、不移動筆（一碰就放開收不到）。按住與圓形選單固定不變。"
         case .pageUp: return "原本的長按：開始／結束放映。"
         case .pageDown: return "原本的長按：黑屏。"
         case .laser: return "雷射鍵只發出實體綠光，不會傳訊號給電腦，所以無法自訂。"
