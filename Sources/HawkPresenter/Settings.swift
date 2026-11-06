@@ -15,6 +15,7 @@ final class EffectSettings {
     var spotlightDim: CGFloat { didSet { save(spotlightDim, "spotlightDim") } }
     var lensRadius: CGFloat { didSet { save(lensRadius, "lensRadius") } }
     var zoom: CGFloat { didSet { save(zoom, "zoom") } }
+    var pointerHaloRadius: CGFloat { didSet { save(pointerHaloRadius, "pointerHaloRadius") } }
 
     static let laserPresets: [(String, NSColor)] = [
         ("紅", .systemRed), ("綠", .systemGreen), ("藍", .systemBlue),
@@ -33,6 +34,7 @@ final class EffectSettings {
         spotlightDim = load("spotlightDim", 0.75)
         lensRadius = load("lensRadius", 170)
         zoom = load("zoom", 2)
+        pointerHaloRadius = load("pointerHaloRadius", 30)
     }
 
     private func save(_ v: CGFloat, _ key: String) { defaults.set(Double(v), forKey: key) }
@@ -45,6 +47,7 @@ final class EffectSettings {
         case .laser: laserRadius = (laserRadius + 4 * s).clamped(6, 60)
         case .spotlight: spotlightRadius = (spotlightRadius + 30 * s).clamped(60, 600)
         case .magnifier: zoom = (zoom + 0.5 * s).clamped(1.5, 5)
+        case .pointer: pointerHaloRadius = (pointerHaloRadius + 6 * s).clamped(16, 90)
         }
     }
 }

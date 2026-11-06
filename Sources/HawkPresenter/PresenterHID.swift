@@ -4,11 +4,15 @@ import IOKit.hid
 /// Talks to the "Wireless Present" USB dongle (VID 0x2571, PID 0x4109).
 ///
 /// Protocol, decoded by sniffing (see README):
-/// - Vendor input report 4, byte[1] is a bit field:
+/// - Vendor input report 4, byte[1]. Values below 0x10 are a bit field:
 ///     0x04  mode key held (the pen also starts moving the cursor via its gyro)
-///     0x01  page-up pressed while mode key held (dongle swallows the real Page Up)
-///     0x02  page-down pressed while mode key held
+///     0x01  page-up held while mode key held (stays set until released;
+///           the dongle swallows the real Page Up)
+///     0x02  page-down held while mode key held
 ///     0x08  mode key double-tapped
+///   Values from 0x10 up are whole codes, not flags:
+///     0xED  volume-up pressed while mode key held (system volume unaffected)
+///     0xEE  volume-down pressed while mode key held
 ///     0x80  heartbeat, roughly once a second — ignore
 /// - Page up/down, long-press page up/down, volume keys arrive as ordinary
 ///   keyboard/consumer reports; macOS handles them without us.
@@ -16,8 +20,11 @@ final class PresenterHID {
     enum Event {
         case holdBegan
         case holdEnded
-        case pageUpWhileHeld
-        case pageDownWhileHeld
+        /// Page up/down went down while holding; `adjustEnded` follows on release.
+        case adjustBegan(bigger: Bool)
+        case adjustEnded
+        case volumeUpWhileHeld
+        case volumeDownWhileHeld
         case doubleTap
         case connected(Bool)
     }
@@ -30,6 +37,7 @@ final class PresenterHID {
     private let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
     private var buffers: [UnsafeMutablePointer<UInt8>] = []
     private var lastBits: UInt8 = 0
+    private var lastRaw: UInt8 = 0
     private var held = false
     private var lastPenMouse = Date.distantPast
     private var releaseTimer: Timer?
@@ -83,26 +91,46 @@ final class PresenterHID {
 
     private func handle(bits raw: UInt8) {
         if raw == 0x80 { return } // heartbeat
-        let bits = raw & 0x0F
-        defer { lastBits = bits }
+        defer { lastRaw = raw }
 
+        if raw >= 0x10 {
+            // Whole codes; all of them imply the mode key is held.
+            markHeld()
+            if raw != lastRaw {
+                if raw == 0xED { onEvent?(.volumeUpWhileHeld) }
+                if raw == 0xEE { onEvent?(.volumeDownWhileHeld) }
+            }
+            return
+        }
+
+        let bits = raw
+        defer { lastBits = bits }
         if bits & 0x08 != 0 && lastBits & 0x08 == 0 { onEvent?(.doubleTap) }
 
+        let adjust = bits & 0x03, lastAdjust = lastBits & 0x03
+        if adjust != lastAdjust {
+            if lastAdjust != 0 { onEvent?(.adjustEnded) }
+            if adjust == 0x01 { onEvent?(.adjustBegan(bigger: true)) }
+            if adjust == 0x02 { onEvent?(.adjustBegan(bigger: false)) }
+        }
+
         if bits & 0x04 != 0 {
-            releaseTimer?.invalidate(); releaseTimer = nil
-            if !held { held = true; onEvent?(.holdBegan) }
-            if bits & 0x01 != 0 && lastBits & 0x01 == 0 { onEvent?(.pageUpWhileHeld) }
-            if bits & 0x02 != 0 && lastBits & 0x02 == 0 { onEvent?(.pageDownWhileHeld) }
+            markHeld()
         } else if held {
             scheduleReleaseCheck()
         }
+    }
+
+    private func markHeld() {
+        releaseTimer?.invalidate(); releaseTimer = nil
+        if !held { held = true; onEvent?(.holdBegan) }
     }
 
     private func scheduleReleaseCheck() {
         releaseTimer?.invalidate()
         releaseTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] t in
             guard let self else { t.invalidate(); return }
-            if self.lastBits & 0x04 != 0 { t.invalidate(); return }
+            if self.lastBits & 0x04 != 0 || self.lastRaw >= 0x10 { t.invalidate(); return }
             if Date().timeIntervalSince(self.lastPenMouse) >= self.releaseQuietInterval {
                 t.invalidate()
                 self.held = false

@@ -20,7 +20,7 @@ final class MenuController: NSObject, NSMenuDelegate {
         menu.addItem(statusLine)
         menu.addItem(.separator())
 
-        menu.addItem(header("模式（連按兩下模式鍵切換）"))
+        menu.addItem(header("模式（按住模式鍵＋音量鍵切換）"))
         for mode in EffectMode.allCases {
             let item = NSMenuItem(title: mode.title, action: #selector(pickMode(_:)), keyEquivalent: "")
             item.target = self

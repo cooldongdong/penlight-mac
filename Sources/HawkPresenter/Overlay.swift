@@ -1,17 +1,25 @@
 import AppKit
 
 enum EffectMode: Int, CaseIterable {
-    case laser, spotlight, magnifier
+    case laser, spotlight, magnifier, pointer
 
     var title: String {
         switch self {
         case .laser: return "雷射點"
         case .spotlight: return "聚光燈"
         case .magnifier: return "放大鏡"
+        case .pointer: return "滑鼠"
         }
     }
 
+    /// Modes that keep the real cursor visible (so links show the hand cursor).
+    var showsSystemCursor: Bool { self == .pointer }
+
     var next: EffectMode { EffectMode(rawValue: (rawValue + 1) % EffectMode.allCases.count)! }
+    var previous: EffectMode {
+        let n = EffectMode.allCases.count
+        return EffectMode(rawValue: (rawValue + n - 1) % n)!
+    }
 }
 
 /// Transparent, click-through window covering one screen, drawn above everything
@@ -51,6 +59,7 @@ final class EffectView: NSView {
         case .laser: drawLaser()
         case .spotlight: drawSpotlight()
         case .magnifier: break // drawn by `lens`
+        case .pointer: drawPointerHalo()
         }
         updateLens()
     }
@@ -72,6 +81,18 @@ final class EffectView: NSView {
         NSBezierPath(ovalIn: circle(p, r)).fill()
         NSColor.white.withAlphaComponent(0.85).setFill()
         NSBezierPath(ovalIn: circle(p, r * 0.35)).fill()
+    }
+
+    /// Soft ring around the real cursor so the audience can find it.
+    private func drawPointerHalo() {
+        guard let p = point else { return }
+        let r = settings.pointerHaloRadius
+        let ring = NSBezierPath(ovalIn: circle(p, r))
+        settings.laserColor.withAlphaComponent(0.18).setFill()
+        ring.fill()
+        settings.laserColor.withAlphaComponent(0.7).setStroke()
+        ring.lineWidth = 3
+        ring.stroke()
     }
 
     private func drawSpotlight() {
@@ -146,7 +167,7 @@ final class OverlayController {
     func show(hideCursor: Bool = true) {
         if hideCursor { settings.previewMode = nil; previewEnd?.cancel() } // real hold wins over a preview
         isShowing = true
-        if hideCursor { SystemCursor.hide() }
+        if hideCursor && !settings.activeMode.showsSystemCursor { SystemCursor.hide() }
         redraw()
         windows.forEach { $0.window.orderFrontRegardless() }
         tracker?.invalidate()
@@ -170,6 +191,15 @@ final class OverlayController {
     }
 
     func redraw() { windows.forEach { $0.view.needsDisplay = true } }
+
+    /// Call after switching mode while the effect is on screen.
+    func modeChanged() {
+        if isShowing && settings.previewMode == nil {
+            settings.activeMode.showsSystemCursor ? SystemCursor.show() : SystemCursor.hide()
+        }
+        redraw()
+        windows.forEach { $0.view.updateLens() }
+    }
 
     private func update() {
         let mouse = NSEvent.mouseLocation // global, bottom-left origin

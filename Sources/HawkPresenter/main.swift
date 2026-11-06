@@ -20,13 +20,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             switch event {
             case .holdBegan: self.overlay.show()
-            case .holdEnded: self.overlay.hide()
-            case .pageUpWhileHeld: self.overlay.settings.adjust(bigger: true); self.overlay.redraw()
-            case .pageDownWhileHeld: self.overlay.settings.adjust(bigger: false); self.overlay.redraw()
-            case .doubleTap:
-                self.overlay.settings.mode = self.overlay.settings.mode.next
-                self.overlay.redraw()
-                self.hud.flash(self.overlay.settings.mode.title)
+            case .holdEnded: self.stopAdjusting(); self.overlay.hide()
+            case .adjustBegan(let bigger): self.startAdjusting(bigger: bigger)
+            case .adjustEnded: self.stopAdjusting()
+            case .volumeUpWhileHeld, .doubleTap: self.switchMode(to: self.overlay.settings.mode.next)
+            case .volumeDownWhileHeld: self.switchMode(to: self.overlay.settings.mode.previous)
             case .connected(let ok): self.menu.statusLine.title = ok ? "簡報筆：已連線" : "簡報筆：未連線"
             }
         }
@@ -38,6 +36,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
            let mode = EffectMode.allCases.first(where: { "\($0)" == args[i + 1] }) {
             overlay.preview(mode: mode, for: 8)
         }
+    }
+
+    private func switchMode(to mode: EffectMode) {
+        overlay.settings.mode = mode
+        overlay.modeChanged()
+        hud.flash(mode.title)
+    }
+
+    // MARK: Page up/down while holding: one step on press, then continuous while held.
+
+    private var adjustTimer: Timer?
+    private var adjustDelay: DispatchWorkItem?
+
+    private func startAdjusting(bigger: Bool) {
+        stopAdjusting()
+        overlay.settings.adjust(bigger: bigger)
+        overlay.redraw()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            let fps = 60.0, stepsPerSecond = 4.0
+            let timer = Timer(timeInterval: 1 / fps, repeats: true) { [weak self] _ in
+                self?.overlay.settings.adjust(bigger: bigger, steps: CGFloat(stepsPerSecond / fps))
+                self?.overlay.redraw()
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            self.adjustTimer = timer
+        }
+        adjustDelay = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+    }
+
+    private func stopAdjusting() {
+        adjustDelay?.cancel(); adjustDelay = nil
+        adjustTimer?.invalidate(); adjustTimer = nil
     }
 
     func applicationWillTerminate(_ notification: Notification) {
